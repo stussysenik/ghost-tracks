@@ -6,8 +6,12 @@
  *
  * IMPORTANT: These are suggestions to inspire creativity.
  * When it comes to Strava art, the sky's the limit!
+ *
+ * Routes are snapped to actual streets using Mapbox Directions API.
+ * Run `bun run tools/generate-routes.ts` to regenerate routed shapes.
  */
 import type { Shape } from '$types';
+import routedShapesData from './prague-shapes-routed.json';
 
 /**
  * Prague Shapes Dataset
@@ -521,6 +525,25 @@ export const pragueShapes: Shape[] = [
 ];
 
 /**
+ * Backward-compatible aliases for older route IDs.
+ * This keeps old links functional after data refreshes.
+ */
+const shapeIdAliases: Record<string, string> = {
+	'fox-stare-mesto': 'prague-fox-1',
+	'cat-mala-strana': 'prague-cat-1',
+	'bird-josefov': 'prague-bird-1',
+	'dog-nove-mesto': 'prague-dog-1',
+	'rabbit-hradcany': 'prague-rabbit-1'
+};
+
+/**
+ * Resolve a user-provided or legacy ID to the canonical shape ID.
+ */
+export function resolveShapeId(id: string): string {
+	return shapeIdAliases[id] ?? id;
+}
+
+/**
  * Get all shapes (for initial load)
  */
 export function getAllShapes(): Shape[] {
@@ -531,7 +554,8 @@ export function getAllShapes(): Shape[] {
  * Get shape by ID
  */
 export function getShapeById(id: string): Shape | undefined {
-	return pragueShapes.find(shape => shape.id === id);
+	const resolvedId = resolveShapeId(id);
+	return pragueShapes.find(shape => shape.id === resolvedId);
 }
 
 /**
@@ -580,4 +604,54 @@ export function searchShapes(query: string): Shape[] {
 		shape.description?.toLowerCase().includes(lowerQuery) ||
 		shape.tags?.some(tag => tag.toLowerCase().includes(lowerQuery))
 	);
+}
+
+// ============================================================================
+// ROUTED SHAPES - Snapped to actual streets
+// ============================================================================
+
+/** Routed shapes loaded from pre-computed JSON */
+const routedShapes: Shape[] = (routedShapesData as Shape[]).map(shape => ({
+	...shape,
+	is_routed: shape.routing_method === 'directions'
+}));
+
+/**
+ * Get all shapes with routed geometry (when available)
+ * Falls back to original geometry if routing failed
+ */
+export function getRoutedShapes(): Shape[] {
+	return routedShapes.map(shape => {
+		if (shape.routed_geometry && shape.routing_method === 'directions') {
+			return {
+				...shape,
+				// Use routed geometry as primary
+				geometry: shape.routed_geometry,
+				// Update distance and time with actual routed values
+				distance_km: shape.routed_distance_km || shape.distance_km,
+				estimated_minutes: shape.routed_duration_minutes || shape.estimated_minutes,
+				is_routed: true
+			};
+		}
+		return { ...shape, is_routed: false };
+	});
+}
+
+/**
+ * Get a single shape with routed geometry
+ */
+export function getRoutedShapeById(id: string): Shape | undefined {
+	const resolvedId = resolveShapeId(id);
+	const shapes = getRoutedShapes();
+	return shapes.find(shape => shape.id === resolvedId);
+}
+
+/**
+ * Get shapes with option to use routed or original geometry
+ */
+export function getShapesWithMode(useRoutedGeometry: boolean = true): Shape[] {
+	if (useRoutedGeometry) {
+		return getRoutedShapes();
+	}
+	return pragueShapes;
 }

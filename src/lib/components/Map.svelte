@@ -1,59 +1,46 @@
 <script lang="ts">
 	/**
 	 * Ghost Tracks - Map Component
-	 *
-	 * Interactive Mapbox GL JS map optimized for mobile with:
-	 * - Hardware-accelerated rendering
-	 * - Touch-friendly controls
-	 * - Ghost route overlay layers
-	 * - Viewport change events for loading shapes
 	 */
 	import { onMount, onDestroy } from 'svelte';
+	import { writable, get } from 'svelte/store';
 	import mapboxgl from 'mapbox-gl';
-	import type { Shape, ShapeFeatureCollection, BoundingBox } from '$types';
+	import type { Shape, ShapeFeatureCollection, BoundingBox, LineStringGeometry } from '$types';
 
-	// Props
 	interface Props {
-		/** Mapbox access token (required) */
 		accessToken: string;
-		/** Initial center coordinates [lng, lat] - defaults to Prague */
 		center?: [number, number];
-		/** Initial zoom level */
 		zoom?: number;
-		/** Shapes to display as ghost routes */
 		shapes?: Shape[];
-		/** Currently selected shape (highlighted) */
 		selectedShape?: Shape | null;
-		/** Callback when map viewport changes (for loading shapes) */
+		selectedRouteGeometry?: LineStringGeometry | null;
+		showRoutes?: boolean;
 		onViewportChange?: (bounds: BoundingBox) => void;
-		/** Callback when a shape is clicked */
 		onShapeClick?: (shape: Shape) => void;
 	}
 
 	let {
 		accessToken,
-		center = [14.4378, 50.0755], // Prague center
+		center = [14.4378, 50.0755],
 		zoom = 13,
 		shapes = [],
 		selectedShape = null,
+		selectedRouteGeometry = null,
+		showRoutes = true,
 		onViewportChange,
 		onShapeClick
 	}: Props = $props();
 
-	// Map instance reference
 	let mapContainer: HTMLDivElement;
+	let loadingOverlay: HTMLDivElement;
 	let map: mapboxgl.Map | null = null;
-	let isMapLoaded = $state(false);
+	const isMapLoaded = writable(false);
 
-	// Layer IDs for ghost routes
 	const GHOST_LAYER_ID = 'ghost-routes';
 	const GHOST_SOURCE_ID = 'ghost-routes-source';
 	const SELECTED_LAYER_ID = 'selected-route';
 	const SELECTED_SOURCE_ID = 'selected-route-source';
 
-	/**
-	 * Convert shapes to GeoJSON FeatureCollection for map rendering
-	 */
 	function shapesToGeoJSON(shapes: Shape[]): ShapeFeatureCollection {
 		return {
 			type: 'FeatureCollection',
@@ -77,9 +64,31 @@
 		};
 	}
 
-	/**
-	 * Get map bounds as BoundingBox tuple
-	 */
+	function selectedToGeoJSON(shape: Shape, geometry?: LineStringGeometry | null): ShapeFeatureCollection {
+		return {
+			type: 'FeatureCollection',
+			features: [
+				{
+					type: 'Feature',
+					id: shape.id,
+					properties: {
+						id: shape.id,
+						name: shape.name,
+						emoji: shape.emoji,
+						category: shape.category,
+						distance_km: shape.distance_km,
+						difficulty: shape.difficulty,
+						estimated_minutes: shape.estimated_minutes,
+						area: shape.area,
+						description: shape.description
+					},
+					geometry: geometry ?? shape.geometry,
+					bbox: shape.bbox
+				}
+			]
+		};
+	}
+
 	function getBounds(): BoundingBox {
 		if (!map) return [0, 0, 0, 0];
 		const bounds = map.getBounds();
@@ -92,66 +101,61 @@
 		];
 	}
 
-	/**
-	 * Update ghost routes layer with new shapes
-	 */
 	function updateGhostRoutes(shapes: Shape[]) {
-		if (!map || !isMapLoaded) return;
-
+		if (!map || !get(isMapLoaded)) return;
 		const source = map.getSource(GHOST_SOURCE_ID) as mapboxgl.GeoJSONSource;
 		if (source) {
 			source.setData(shapesToGeoJSON(shapes));
 		}
 	}
 
-	/**
-	 * Update selected route highlight
-	 */
-	function updateSelectedRoute(shape: Shape | null) {
-		if (!map || !isMapLoaded) return;
-
+	function updateSelectedRoute(shape: Shape | null, geometry?: LineStringGeometry | null) {
+		if (!map || !get(isMapLoaded)) return;
 		const source = map.getSource(SELECTED_SOURCE_ID) as mapboxgl.GeoJSONSource;
-		if (source) {
-			source.setData(
-				shape
-					? shapesToGeoJSON([shape])
-					: { type: 'FeatureCollection', features: [] }
-			);
+		if (!source) return;
+
+		if (!shape) {
+			source.setData({ type: 'FeatureCollection', features: [] });
+			return;
+		}
+
+		source.setData(selectedToGeoJSON(shape, geometry));
+	}
+
+	function updateVisibility(visible: boolean) {
+		if (!map || !get(isMapLoaded)) return;
+		const visibility = visible ? 'visible' : 'none';
+		if (map.getLayer(GHOST_LAYER_ID)) {
+			map.setLayoutProperty(GHOST_LAYER_ID, 'visibility', visibility);
+		}
+		if (map.getLayer(SELECTED_LAYER_ID)) {
+			map.setLayoutProperty(SELECTED_LAYER_ID, 'visibility', visibility);
 		}
 	}
 
-	/**
-	 * Initialize the map
-	 */
 	onMount(() => {
-		// Set access token
 		mapboxgl.accessToken = accessToken;
 
-		// Create map instance
 		map = new mapboxgl.Map({
 			container: mapContainer,
-			style: 'mapbox://styles/mapbox/light-v11', // Clean, minimal style
+			style: 'mapbox://styles/mapbox/light-v11',
 			center: center,
 			zoom: zoom,
 			minZoom: 10,
 			maxZoom: 18,
 			attributionControl: true,
-			// Mobile optimizations
 			touchZoomRotate: true,
-			touchPitch: false, // Disable pitch for 2D simplicity
-			dragRotate: false, // Disable rotation for cleaner UX
-			// Performance
+			touchPitch: false,
+			dragRotate: false,
 			antialias: true,
 			preserveDrawingBuffer: false
 		});
 
-		// Add navigation controls (top-right, desktop only)
 		map.addControl(
 			new mapboxgl.NavigationControl({ showCompass: false }),
 			'top-right'
 		);
 
-		// Add geolocation control
 		map.addControl(
 			new mapboxgl.GeolocateControl({
 				positionOptions: { enableHighAccuracy: true },
@@ -161,31 +165,32 @@
 			'top-right'
 		);
 
-		// Add scale control
 		map.addControl(
 			new mapboxgl.ScaleControl({ maxWidth: 100 }),
 			'bottom-left'
 		);
 
-		// Map load handler - set up layers
 		map.on('load', () => {
-			isMapLoaded = true;
+			isMapLoaded.set(true);
+			// Hide loading overlay directly (workaround for Svelte 5 store reactivity)
+			if (loadingOverlay) {
+				loadingOverlay.style.opacity = '0';
+				loadingOverlay.style.pointerEvents = 'none';
+			}
 
-			// Add source for ghost routes (all routes)
 			map!.addSource(GHOST_SOURCE_ID, {
 				type: 'geojson',
 				data: shapesToGeoJSON(shapes)
 			});
 
-			// Ghost routes layer - faint, pulsing lines
 			map!.addLayer({
 				id: GHOST_LAYER_ID,
 				type: 'line',
 				source: GHOST_SOURCE_ID,
 				paint: {
 					'line-color': '#FF6B35',
-					'line-width': 4,
-					'line-opacity': 0.4,
+					'line-width': 3,
+					'line-opacity': 0.35,
 					'line-blur': 1
 				},
 				layout: {
@@ -194,20 +199,18 @@
 				}
 			});
 
-			// Add source for selected route (highlighted)
 			map!.addSource(SELECTED_SOURCE_ID, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] }
 			});
 
-			// Selected route layer - bold, vibrant
 			map!.addLayer({
 				id: SELECTED_LAYER_ID,
 				type: 'line',
 				source: SELECTED_SOURCE_ID,
 				paint: {
-					'line-color': '#FF6B35',
-					'line-width': 6,
+					'line-color': '#3B82F6',
+					'line-width': 5,
 					'line-opacity': 0.9
 				},
 				layout: {
@@ -216,19 +219,18 @@
 				}
 			});
 
-			// Notify parent of initial bounds
+			updateVisibility(showRoutes);
 			onViewportChange?.(getBounds());
 		});
 
-		// Handle map movement (pan/zoom)
 		map.on('moveend', () => {
-			if (isMapLoaded) {
+			if (get(isMapLoaded)) {
 				onViewportChange?.(getBounds());
 			}
 		});
 
-		// Handle clicks on ghost routes
 		map.on('click', GHOST_LAYER_ID, (e) => {
+			if (!showRoutes) return;
 			if (e.features && e.features.length > 0) {
 				const clickedFeature = e.features[0];
 				const shapeId = clickedFeature.properties?.id;
@@ -239,7 +241,6 @@
 			}
 		});
 
-		// Change cursor on hover
 		map.on('mouseenter', GHOST_LAYER_ID, () => {
 			if (map) map.getCanvas().style.cursor = 'pointer';
 		});
@@ -249,17 +250,18 @@
 		});
 	});
 
-	// Update ghost routes when shapes change
 	$effect(() => {
 		updateGhostRoutes(shapes);
 	});
 
-	// Update selected route when selection changes
 	$effect(() => {
-		updateSelectedRoute(selectedShape);
+		updateSelectedRoute(selectedShape, selectedRouteGeometry);
 	});
 
-	// Cleanup
+	$effect(() => {
+		updateVisibility(showRoutes);
+	});
+
 	onDestroy(() => {
 		if (map) {
 			map.remove();
@@ -267,22 +269,16 @@
 		}
 	});
 
-	/**
-	 * Fly to a specific shape's bounding box
-	 */
 	export function flyToShape(shape: Shape) {
-		if (!map || !isMapLoaded) return;
+		if (!map || !get(isMapLoaded)) return;
 		map.fitBounds(shape.bbox as mapboxgl.LngLatBoundsLike, {
 			padding: 50,
 			duration: 1000
 		});
 	}
 
-	/**
-	 * Fly to a location
-	 */
 	export function flyTo(lng: number, lat: number, zoom?: number) {
-		if (!map || !isMapLoaded) return;
+		if (!map || !get(isMapLoaded)) return;
 		map.flyTo({
 			center: [lng, lat],
 			zoom: zoom ?? map.getZoom(),
@@ -291,7 +287,6 @@
 	}
 </script>
 
-<!-- Map container - fills parent -->
 <div
 	bind:this={mapContainer}
 	class="absolute inset-0 w-full h-full"
@@ -299,18 +294,17 @@
 	aria-label="Interactive map showing ghost routes"
 ></div>
 
-<!-- Loading overlay (shows until map loads) -->
-{#if !isMapLoaded}
-	<div class="absolute inset-0 flex items-center justify-center bg-slate-100">
-		<div class="text-center">
-			<div class="text-4xl mb-2 animate-pulse">👻</div>
-			<p class="text-slate-500 text-sm">Loading map...</p>
-		</div>
+<div
+	bind:this={loadingOverlay}
+	class="absolute inset-0 flex items-center justify-center bg-slate-100 transition-opacity duration-300"
+>
+	<div class="text-center">
+		<div class="text-4xl mb-2 animate-pulse">👻</div>
+		<p class="text-slate-500 text-sm">Loading map...</p>
 	</div>
-{/if}
+</div>
 
 <style>
-	/* Ensure map container takes full space */
 	div[role="application"] {
 		z-index: var(--z-map, 0);
 	}

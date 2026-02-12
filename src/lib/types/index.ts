@@ -65,6 +65,21 @@ export interface Shape {
 
 	/** Creation timestamp */
 	created_at?: string;
+
+	/** Routed geometry (snapped to actual streets) */
+	routed_geometry?: LineStringGeometry;
+
+	/** Actual routed distance (may differ from estimated) */
+	routed_distance_km?: number;
+
+	/** Actual routed duration in minutes */
+	routed_duration_minutes?: number;
+
+	/** Routing method used */
+	routing_method?: 'directions' | 'matching' | 'original';
+
+	/** Whether this shape has been routed to actual streets */
+	is_routed?: boolean;
 }
 
 /**
