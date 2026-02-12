@@ -9,6 +9,7 @@ Discover hidden shapes in city streets and create your own Strava art. Ghost Tra
 ## Features
 
 - **Discover Ghost Routes**: See pre-computed shapes overlaid on the map as faint "ghost" routes
+- **Real Street Routing**: Routes are snapped to actual walkable paths using Mapbox Directions API
 - **Multiple Categories**: Filter by Creatures 🦊, Letters 🔤, or Geometric shapes ⭐
 - **Distance Filtering**: Find routes that match your fitness level
 - **AI Suggestions**: Describe your dream route and get intelligent matches
@@ -27,7 +28,7 @@ Discover hidden shapes in city streets and create your own Strava art. Ghost Tra
 
 ```bash
 # Clone the repo
-git clone https://github.com/yourusername/ghost-tracks.git
+git clone https://github.com/stussysenik/ghost-tracks.git
 cd ghost-tracks
 
 # Install dependencies
@@ -97,6 +98,14 @@ Get single shape details.
 ### GET /api/shapes/:id/gpx
 
 Download GPX file for a shape.
+
+### GET /api/shapes/:id/route
+
+Get routed geometry (snapped to streets) for a shape.
+
+### POST /api/route
+
+On-demand route snapping for custom waypoints.
 
 ## Development
 

@@ -1,22 +1,15 @@
 /**
  * Ghost Tracks - Global Styles
- * Built on Tailwind CSS v4
  */
 
-/* Tailwind CSS v4 - imports the framework */
 @import 'tailwindcss';
 
-/* ============================================================================
-   CUSTOM THEME CONFIGURATION
-   ============================================================================ */
-
 @theme {
-	/* Brand Colors - Inspired by sunrise runs and trail adventures */
-	--color-ghost: #FF6B35;       /* Primary: Vibrant orange */
+	--color-ghost: #FF6B35;
 	--color-ghost-light: #FF8C5A;
 	--color-ghost-dark: #E55A28;
 
-	--color-track: #3B82F6;       /* Secondary: Confident blue */
+	--color-track: #3B82F6;
 	--color-track-light: #60A5FA;
 	--color-track-dark: #2563EB;
 
@@ -28,19 +21,15 @@
 	--color-text-muted: #64748B;
 	--color-text-light: #F8FAFC;
 
-	/* Ghost Route Styling */
 	--color-route-ghost: rgba(255, 107, 53, 0.4);
-	--color-route-active: rgba(255, 107, 53, 0.9);
+	--color-route-active: rgba(59, 130, 246, 0.9);
 	--color-route-preview: rgba(59, 130, 246, 0.7);
 
-	/* Spacing scale for mobile-first design */
 	--spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
 	--spacing-safe-top: env(safe-area-inset-top, 0px);
 
-	/* Animation timing */
 	--ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
 
-	/* Z-index layers */
 	--z-map: 0;
 	--z-routes: 10;
 	--z-controls: 20;
@@ -49,14 +38,10 @@
 	--z-toast: 50;
 }
 
-/* ============================================================================
-   BASE STYLES
-   ============================================================================ */
-
 html,
 body {
 	height: 100%;
-	overflow: hidden; /* Prevent scroll bounce on mobile */
+	overflow: hidden;
 }
 
 body {
@@ -67,17 +52,11 @@ body {
 	-moz-osx-font-smoothing: grayscale;
 }
 
-/* ============================================================================
-   MAPBOX OVERRIDES
-   ============================================================================ */
-
-/* Ensure map fills container */
 .mapboxgl-map {
 	position: absolute !important;
 	inset: 0;
 }
 
-/* Style attribution for better mobile UX */
 .mapboxgl-ctrl-attrib {
 	font-size: 10px !important;
 	background: rgba(255, 255, 255, 0.9) !important;
@@ -85,18 +64,27 @@ body {
 	border-radius: 4px 0 0 0 !important;
 }
 
-/* Hide Mapbox logo on mobile for more map space (attribution still visible) */
 @media (max-width: 640px) {
 	.mapboxgl-ctrl-logo {
 		display: none !important;
 	}
 }
 
-/* ============================================================================
-   GHOST ROUTE ANIMATIONS
-   ============================================================================ */
+:root {
+	--map-controls-offset: 120px;
+}
 
-/* Pulsing animation for ghost routes */
+@media (min-width: 768px) {
+	:root {
+		--map-controls-offset: 108px;
+	}
+}
+
+.mapboxgl-ctrl-top-right,
+.mapboxgl-ctrl-top-left {
+	top: calc(var(--map-controls-offset) + var(--spacing-safe-top)) !important;
+}
+
 @keyframes ghost-pulse {
 	0%, 100% {
 		opacity: 0.4;
@@ -110,7 +98,6 @@ body {
 	animation: ghost-pulse 3s ease-in-out infinite;
 }
 
-/* Slide up animation for drawer */
 @keyframes slide-up {
 	from {
 		transform: translateY(100%);
@@ -124,11 +111,6 @@ body {
 	animation: slide-up 0.4s var(--ease-out-expo) forwards;
 }
 
-/* ============================================================================
-   UTILITY CLASSES
-   ============================================================================ */
-
-/* Safe area padding for notched devices */
 .safe-bottom {
 	padding-bottom: max(1rem, var(--spacing-safe-bottom));
 }
@@ -137,20 +119,17 @@ body {
 	padding-top: max(1rem, var(--spacing-safe-top));
 }
 
-/* Glass morphism effect for cards */
 .glass {
-	background: rgba(255, 255, 255, 0.85);
+	background: rgba(255, 255, 255, 0.92);
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
 }
 
-/* Touch-friendly tap targets */
 .tap-target {
 	min-height: 44px;
 	min-width: 44px;
 }
 
-/* Hide scrollbar but allow scrolling */
 .scrollbar-hide {
 	-ms-overflow-style: none;
 	scrollbar-width: none;
@@ -160,11 +139,6 @@ body {
 	display: none;
 }
 
-/* ============================================================================
-   COMPONENT STYLES
-   ============================================================================ */
-
-/* Shape card hover effect */
 .shape-card {
 	transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -178,7 +152,6 @@ body {
 	transform: translateY(0);
 }
 
-/* Button styles */
 .btn-primary {
 	background-color: var(--color-ghost);
 	color: white;
@@ -211,7 +184,6 @@ body {
 	border-color: rgba(0, 0, 0, 0.2);
 }
 
-/* Category pill styles */
 .category-pill {
 	display: inline-flex;
 	align-items: center;
@@ -219,45 +191,20 @@ body {
 	padding: 0.25rem 0.75rem;
 	border-radius: 9999px;
 	font-size: 0.75rem;
-	font-weight: 500;
+	font-weight: 600;
 }
 
 .category-pill.creature {
-	background-color: #FEF3C7;
-	color: #92400E;
+	background: rgba(255, 107, 53, 0.15);
+	color: #9a3412;
 }
 
 .category-pill.letter {
-	background-color: #DBEAFE;
-	color: #1E40AF;
+	background: rgba(59, 130, 246, 0.15);
+	color: #1e3a8a;
 }
 
 .category-pill.geometric {
-	background-color: #F3E8FF;
-	color: #6B21A8;
-}
-
-/* ============================================================================
-   DARK MODE (respects system preference)
-   ============================================================================ */
-
-@media (prefers-color-scheme: dark) {
-	body {
-		background-color: var(--color-surface-dark);
-		color: var(--color-text-light);
-	}
-
-	.glass {
-		background: rgba(15, 23, 42, 0.85);
-	}
-
-	.btn-secondary {
-		color: var(--color-text-light);
-		border-color: rgba(255, 255, 255, 0.1);
-	}
-
-	.btn-secondary:hover {
-		background-color: rgba(255, 255, 255, 0.04);
-		border-color: rgba(255, 255, 255, 0.2);
-	}
+	background: rgba(16, 185, 129, 0.15);
+	color: #065f46;
 }

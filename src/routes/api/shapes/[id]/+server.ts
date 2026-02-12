@@ -7,10 +7,11 @@
  */
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getShapeById } from '$data/prague-shapes';
+import { getShapeById, resolveShapeId } from '$data/prague-shapes';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const { id } = params;
+	const canonicalId = resolveShapeId(id);
 
 	const shape = getShapeById(id);
 
@@ -20,10 +21,17 @@ export const GET: RequestHandler = async ({ params }) => {
 		});
 	}
 
-	return json(shape, {
+	return json(
+		{
+			...shape,
+			requested_id: id,
+			canonical_id: canonicalId
+		},
+		{
 		headers: {
 			// Cache for 1 hour
 			'Cache-Control': 'public, max-age=3600, s-maxage=3600'
 		}
-	});
+		}
+	);
 };

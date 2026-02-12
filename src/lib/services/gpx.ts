@@ -12,9 +12,10 @@ const { Point, Segment, Track } = BaseBuilder.MODELS;
 /**
  * Generate a GPX file from a shape
  */
-export function generateGPX(shape: Shape): string {
+export function generateGPX(shape: Shape, coordinates?: [number, number][]): string {
 	// Create track points from coordinates
-	const points = shape.geometry.coordinates.map(([lng, lat]) => {
+	const routeCoords = coordinates ?? shape.geometry.coordinates;
+	const points = routeCoords.map(([lng, lat]) => {
 		return new Point(lat, lng);
 	});
 
@@ -26,24 +27,9 @@ export function generateGPX(shape: Shape): string {
 		name: shape.name
 	});
 
-	// Build GPX - create object directly without using setMetadata
-	const gpxObject = {
-		metadata: {
-			name: `Ghost Tracks: ${shape.name}`,
-			desc: shape.description || `A ${shape.category} route in ${shape.area}. Distance: ${shape.distance_km}km.`,
-			author: {
-				name: 'Ghost Tracks',
-				link: {
-					href: 'https://ghosttracks.app',
-					text: 'Ghost Tracks - Discover Strava Art Routes'
-				}
-			},
-			time: new Date().toISOString()
-		},
-		trk: [track.toObject()]
-	};
-
-	return buildGPX(gpxObject);
+	const baseBuilder = new BaseBuilder();
+	baseBuilder.setTracks([track]);
+	return buildGPX(baseBuilder.toObject());
 }
 
 /**

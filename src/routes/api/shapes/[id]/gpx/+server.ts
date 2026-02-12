@@ -7,11 +7,14 @@
  */
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getShapeById } from '$data/prague-shapes';
+import { getShapeById, resolveShapeId } from '$data/prague-shapes';
 import { generateGPX, getGPXFilename } from '$services/gpx';
+import { getRoutableCoordinates } from '$services/routing';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
 	const { id } = params;
+	const canonicalId = resolveShapeId(id);
+	const mode = url.searchParams.get('mode') === 'overlay' ? 'overlay' : 'routable';
 
 	// Find the shape
 	const shape = getShapeById(id);
@@ -23,8 +26,11 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 
 	try {
-		// Generate GPX content
-		const gpxContent = generateGPX(shape);
+		const routedCoordinates =
+			mode === 'routable' ? await getRoutableCoordinates(shape) : null;
+
+		// Generate GPX content (falls back to overlay coordinates)
+		const gpxContent = generateGPX(shape, routedCoordinates ?? undefined);
 		const filename = getGPXFilename(shape);
 
 		// Return as downloadable file
@@ -33,6 +39,8 @@ export const GET: RequestHandler = async ({ params }) => {
 			headers: {
 				'Content-Type': 'application/gpx+xml',
 				'Content-Disposition': `attachment; filename="${filename}"`,
+				'X-Canonical-Shape-Id': canonicalId,
+				'X-Route-Mode': routedCoordinates ? 'routable' : 'overlay',
 				// Cache for 1 hour (GPX content is deterministic)
 				'Cache-Control': 'public, max-age=3600, s-maxage=3600'
 			}

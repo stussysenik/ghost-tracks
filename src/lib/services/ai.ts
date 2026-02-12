@@ -8,7 +8,8 @@
  * or suggests creative ideas based on available shapes.
  */
 import type { Shape, BoundingBox } from '$types';
-import { getAllShapes, searchShapes } from '$data/prague-shapes';
+import { env } from '$env/dynamic/private';
+import { getAllShapes, getShapesInBounds } from '$data/prague-shapes';
 
 // ============================================================================
 // TYPES
@@ -144,12 +145,16 @@ export class LocalProvider implements AIProvider {
 function localMatch(context: AIContext): AISuggestion {
 	const prompt = context.prompt.toLowerCase();
 	const allShapes = getAllShapes();
+	const boundedShapes = context.viewport?.bounds
+		? getShapesInBounds(context.viewport.bounds)
+		: allShapes;
+	const shapePool = boundedShapes.length > 0 ? boundedShapes : allShapes;
 
 	// Extract potential keywords from the prompt
 	const keywords = extractKeywords(prompt);
 
 	// Score each shape based on keyword matches
-	const scoredShapes = allShapes.map(shape => ({
+	const scoredShapes = shapePool.map(shape => ({
 		shape,
 		score: scoreShape(shape, keywords, context)
 	}));
@@ -171,7 +176,9 @@ function localMatch(context: AIContext): AISuggestion {
 	} else if (prompt.length < 3) {
 		message = "Try describing what you'd like to run - a shape, distance, or area!";
 	} else {
-		message = "No exact match found, but check out these suggestions! Remember, you can always create your own route.";
+		message = boundedShapes.length === 0 && context.viewport?.bounds
+			? "No matches inside this area yet. Showing the closest suggestions we have."
+			: "No exact match found, but check out these suggestions! Remember, you can always create your own route.";
 	}
 
 	return {
@@ -301,13 +308,13 @@ function scoreShape(shape: Shape, keywords: string[], context: AIContext): numbe
  */
 export function getAIProvider(): AIProvider {
 	// Check for API keys in order of priority
-	const glmKey = process.env.GLM_API_KEY;
-	const geminiKey = process.env.GEMINI_API_KEY;
-	const kimiKey = process.env.KIMI_API_KEY;
-	const claudeKey = process.env.ANTHROPIC_API_KEY;
+	const glmKey = env.GLM_API_KEY;
+	const geminiKey = env.GEMINI_API_KEY;
+	const kimiKey = env.KIMI_API_KEY;
+	const claudeKey = env.ANTHROPIC_API_KEY;
 
 	// Check explicit provider preference
-	const preferredProvider = process.env.AI_PROVIDER?.toLowerCase();
+	const preferredProvider = env.AI_PROVIDER?.toLowerCase();
 
 	if (preferredProvider === 'glm' && glmKey) {
 		return new GLMProvider(glmKey);

@@ -13,7 +13,8 @@
 
 	// Props from page load
 	let { data } = $props();
-	const shape: Shape = data.shape;
+	const shape = $derived(data.shape as Shape);
+	const canonicalId = $derived((data.canonicalId as string) ?? shape.id);
 
 	// Format time estimate
 	function formatTime(minutes: number): string {
@@ -56,7 +57,7 @@
 
 	// Open in main app
 	function openInApp() {
-		window.location.href = `/?shape=${shape.id}`;
+		window.location.href = `/?shape=${canonicalId}`;
 	}
 </script>
 
@@ -78,7 +79,10 @@
 
 <div class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100">
 	<!-- Hero Section -->
-	<div class="relative overflow-hidden bg-gradient-to-br from-ghost to-ghost-dark text-white">
+	<div
+		class="relative overflow-hidden text-white"
+		style="background: linear-gradient(135deg, #FF6B35 0%, #E55A28 100%);"
+	>
 		<!-- Background pattern -->
 		<div class="absolute inset-0 opacity-10">
 			<svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
@@ -196,7 +200,7 @@
 
 			<!-- Branding -->
 			<div class="pt-4 border-t border-slate-200">
-				<a href="/" class="inline-flex items-center gap-2 text-slate-600 hover:text-ghost transition-colors">
+				<a href="/" class="inline-flex items-center gap-2 text-slate-600 hover:text-[#FF6B35] transition-colors">
 					<span class="text-2xl">👻</span>
 					<span class="font-semibold">Ghost Tracks</span>
 				</a>
@@ -205,24 +209,3 @@
 		</div>
 	</div>
 </div>
-
-<style>
-	.bg-ghost {
-		background-color: #FF6B35;
-	}
-	.bg-ghost-dark {
-		background-color: #E55A28;
-	}
-	.from-ghost {
-		--tw-gradient-from: #FF6B35;
-	}
-	.to-ghost-dark {
-		--tw-gradient-to: #E55A28;
-	}
-	.text-ghost {
-		color: #FF6B35;
-	}
-	.hover\:text-ghost:hover {
-		color: #FF6B35;
-	}
-</style>

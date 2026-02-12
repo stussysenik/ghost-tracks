@@ -6,10 +6,12 @@
  */
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getShapeById } from '$data/prague-shapes';
+import { getShapeById, resolveShapeId } from '$data/prague-shapes';
 
 export const load: PageServerLoad = async ({ params }) => {
-	const shape = getShapeById(params.id);
+	const requestedId = params.id;
+	const canonicalId = resolveShapeId(requestedId);
+	const shape = getShapeById(requestedId);
 
 	if (!shape) {
 		throw error(404, {
@@ -18,6 +20,8 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	return {
-		shape
+		shape,
+		requestedId,
+		canonicalId
 	};
 };
