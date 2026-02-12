@@ -26,27 +26,24 @@ export function generateGPX(shape: Shape): string {
 		name: shape.name
 	});
 
-	// Build GPX
-	const gpxData = new BaseBuilder();
-
-	// Set metadata (using type assertion for flexibility with gpx-builder's strict types)
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	gpxData.setMetadata({
-		name: `Ghost Tracks: ${shape.name}`,
-		desc: shape.description || `A ${shape.category} route in ${shape.area}. Distance: ${shape.distance_km}km.`,
-		author: {
-			name: 'Ghost Tracks',
-			link: {
-				href: 'https://ghosttracks.app',
-				text: 'Ghost Tracks - Discover Strava Art Routes'
-			}
+	// Build GPX - create object directly without using setMetadata
+	const gpxObject = {
+		metadata: {
+			name: `Ghost Tracks: ${shape.name}`,
+			desc: shape.description || `A ${shape.category} route in ${shape.area}. Distance: ${shape.distance_km}km.`,
+			author: {
+				name: 'Ghost Tracks',
+				link: {
+					href: 'https://ghosttracks.app',
+					text: 'Ghost Tracks - Discover Strava Art Routes'
+				}
+			},
+			time: new Date().toISOString()
 		},
-		time: new Date()
-	} as any);
+		trk: [track.toObject()]
+	};
 
-	gpxData.setTracks([track]);
-
-	return buildGPX(gpxData.toObject());
+	return buildGPX(gpxObject);
 }
 
 /**
