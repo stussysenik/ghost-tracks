@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+		<!-- Ghost Tracks Meta -->
+		<meta name="description" content="Discover hidden shapes in city streets. Ghost Tracks reveals running routes that form art - animals, letters, and geometric patterns waiting to be traced." />
+		<meta name="theme-color" content="#FF6B35" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+		<!-- Open Graph / Social Sharing -->
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Ghost Tracks" />
+		<meta property="og:title" content="Ghost Tracks - Discover Strava Art Routes" />
+		<meta property="og:description" content="Don't just run a route. Reveal it. Find hidden shapes in your city's streets." />
+		<meta property="og:image" content="/og-image.png" />
+
+		<!-- Twitter Card -->
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content="Ghost Tracks" />
+		<meta name="twitter:description" content="Discover hidden shapes in city streets and create your own Strava art." />
+
+		<!-- Favicon -->
+		<link rel="icon" href="/favicon.ico" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+		<!-- Mapbox CSS -->
+		<link href="https://api.mapbox.com/mapbox-gl-js/v3.9.0/mapbox-gl.css" rel="stylesheet" />
+
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover" class="antialiased">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
