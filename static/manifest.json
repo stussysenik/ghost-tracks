@@ -1,0 +1,25 @@
+{
+	"name": "Ghost Tracks",
+	"short_name": "GhostTracks",
+	"description": "Discover hidden shapes in city streets. Don't just run a route. Reveal it.",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#f8fafc",
+	"theme_color": "#FF6B35",
+	"orientation": "portrait",
+	"icons": [
+		{
+			"src": "/favicon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml"
+		}
+	],
+	"categories": ["sports", "fitness", "navigation"],
+	"shortcuts": [
+		{
+			"name": "Explore Shapes",
+			"url": "/",
+			"description": "Find ghost routes near you"
+		}
+	]
+}
