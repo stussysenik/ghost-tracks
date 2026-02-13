@@ -1,248 +1,195 @@
-# Ghost Tracks - Developer Documentation
+# Ghost Tracks - Technical Documentation
 
 ## Architecture Overview
 
-Ghost Tracks is a SvelteKit application that helps runners discover shapes hidden in city streets. Routes are pre-computed and snapped to actual walkable paths using the Mapbox Directions API.
-
-### Tech Stack
-
-- **Frontend**: SvelteKit 2 + Svelte 5 (runes)
-- **Maps**: Mapbox GL JS v3
-- **Styling**: Tailwind CSS v4
-- **GPX Export**: gpx-builder v6
-- **Deployment**: Vercel (Edge Functions)
-
-### Project Structure
-
 ```
-src/
-├── routes/
-│   ├── +page.svelte              # Main map interface
-│   ├── api/
-│   │   ├── shapes/+server.ts     # GET /api/shapes - list shapes
-│   │   ├── shapes/[id]/
-│   │   │   ├── +server.ts        # GET /api/shapes/:id - shape details
-│   │   │   ├── gpx/+server.ts    # GET /api/shapes/:id/gpx - GPX export
-│   │   │   └── route/+server.ts  # GET /api/shapes/:id/route - routed geometry
-│   │   ├── route/+server.ts      # POST /api/route - on-demand routing
-│   │   └── suggest/+server.ts    # POST /api/suggest - AI suggestions
-│   └── shape/[id]/
-│       ├── +page.svelte          # Shareable shape page
-│       └── +page.server.ts       # SSR data loading
-├── lib/
-│   ├── components/
-│   │   ├── Map.svelte            # Mapbox GL wrapper
-│   │   ├── ShapeDrawer.svelte    # Bottom sheet for shape details
-│   │   ├── FilterBar.svelte      # Category/distance filters
-│   │   └── SearchBar.svelte      # AI-powered search
-│   ├── data/
-│   │   ├── prague-shapes.ts      # Shape definitions & helpers
-│   │   └── prague-shapes-routed.json  # Pre-computed routed geometries
-│   ├── services/
-│   │   ├── routing.ts            # Mapbox Directions API wrapper
-│   │   ├── gpx.ts                # GPX file generation
-│   │   └── ai.ts                 # AI provider abstraction
-│   └── types/
-│       └── index.ts              # TypeScript interfaces
-└── app.css                       # Global styles + Tailwind
+Browser (SvelteKit)
+  |
+  |-- /api/describe  -->  SvelteKit proxy  -->  FastAPI :8000/describe
+  |-- /api/generate  -->  SvelteKit proxy  -->  FastAPI :8000/generate
+  |
+  v
+Mapbox GL JS (map rendering, route overlay, waypoint markers)
 ```
 
----
+The frontend is a SvelteKit 2 app using Svelte 5 runes for state management. API requests are proxied through SvelteKit server routes to the Python FastAPI backend. The backend orchestrates shape generation, street mapping, and validation.
 
-## API Reference
+## Shape Generation Pipeline
 
-### GET /api/shapes
+When a user describes a shape (e.g. "a heart shape"), the following pipeline executes:
 
-Returns shapes filtered by viewport and preferences.
+### 1. Shape Interpretation (backend/services/shape_generator.py)
 
-**Query Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `bbox` | string | Bounding box: `minLng,minLat,maxLng,maxLat` |
-| `category` | string | Filter by category: `creature`, `letter`, `geometric` |
-| `distance_min` | number | Minimum distance in km |
-| `distance_max` | number | Maximum distance in km |
-| `limit` | number | Max shapes to return (default: 50) |
+The DSPy framework with ZhipuAI GLM-4-plus interprets the description:
+- Extracts shape name, emoji, difficulty, and category
+- Maps to a parametric template if one exists (heart, star, circle, triangle, arrow, square, letters)
+- Falls back to circle for unrecognized shapes
+
+### 2. Neighborhood Selection (backend/services/neighborhood.py)
+
+Selects the best Prague neighborhood for the shape:
+- 12 neighborhoods with metadata: center, bbox, street layout (grid/organic/mixed/radial), good-for tags
+- Normalized keyword matching (strips plurals and noise words)
+- Layout preference map (hearts prefer mixed streets, stars prefer grid, etc.)
+- Hash-based tiebreaking to avoid ordering bias
+- Returns top alternatives for user re-routing
+
+### 3. Template Generation (backend/services/shape_templates.py)
+
+Generates control points from parametric equations:
+- Heart: 64 points using the standard parametric heart curve
+- Star: 21 points (5 outer tips + 5 inner valleys + midpoints)
+- Circle: 48 points around circumference
+- Letters: Point-based definitions for A-Z
+- Points are generated in normalized [-1, 1] space
+
+### 4. Street Mapping (backend/services/street_mapper.py)
+
+Transforms abstract control points to real street coordinates:
+
+1. **Scale to bbox**: Maps normalized points into the neighborhood's geographic bounding box
+2. **Densify** (80m max segment): Inserts intermediate points so Mapbox doesn't shortcut between distant waypoints
+3. **Deduplicate** (12m min distance): Removes points too close together, but preserves points where bearing changes >20 degrees (curvature-aware)
+4. **Snap to streets**: Sends waypoints to Mapbox Directions API (walking profile) which returns a route following real streets
+5. **Extract waypoints**: Generates numbered turn-by-turn instructions from the Mapbox response
+
+### 5. Shape Validation (backend/services/shape_validator.py)
+
+Scores how well the street-snapped route matches the intended shape using three metrics:
+
+| Component | Weight | Method |
+|-----------|--------|--------|
+| Modified Hausdorff | 55% | 90th-percentile directed distance (robust to single-point outliers from routing detours) |
+| Ordered Sampling | 35% | Resample both curves to 50 equal points, compute mean distance between corresponding pairs |
+| Raster IoU | 10% | Rasterize both to 128x128 with thick lines (width=12), compute pixel intersection-over-union |
+
+Scores are normalized against the shape's diameter. A score of 85%+ indicates a good match.
+
+Optional vision model validation (GLM-4v) is supported but not required.
+
+### 6. Retry Logic
+
+If validation score is below threshold (45%):
+- **Deviation-targeted tightening**: Identifies segments where the route deviates most from target
+- Inserts extra control points at the worst 50% of segments
+- Re-routes through Mapbox Directions
+- Up to 2 retry attempts
+
+## API Endpoints
+
+### POST /describe
+
+Generate a route from a shape description.
+
+**Request:**
+```json
+{
+  "description": "a heart shape",
+  "neighborhood": "Letna",
+  "max_distance_km": 10.0
+}
+```
 
 **Response:**
 ```json
 {
-  "shapes": [
+  "shape": {
+    "name": "A Heart Shape",
+    "emoji": "...",
+    "difficulty": "moderate",
+    "description": "A heart shape route through Letna",
+    "category": "geometric"
+  },
+  "routed_coordinates": [[14.42, 50.10], ...],
+  "distance_km": 7.6,
+  "duration_minutes": 92,
+  "waypoints": [
+    {"index": 1, "lat": 50.10, "lng": 14.42, "instruction": "Head north on ..."}
+  ],
+  "similarity_score": 87,
+  "neighborhood": "Letna",
+  "bbox": {"min_lng": 14.41, "min_lat": 50.09, "max_lng": 14.44, "max_lat": 50.11},
+  "alternative_neighborhoods": ["Smichov", "Zizkov", "Nove Mesto"]
+}
+```
+
+### POST /generate
+
+Generate shape ideas for a neighborhood.
+
+**Request:**
+```json
+{
+  "neighborhood": "Karlin",
+  "count": 3
+}
+```
+
+**Response:**
+```json
+{
+  "ideas": [
     {
-      "id": "prague-fox-1",
-      "name": "Fox Across Staré Město",
-      "emoji": "🦊",
-      "category": "creature",
-      "distance_km": 7.91,
+      "name": "A Heart Shape",
+      "emoji": "...",
       "difficulty": "moderate",
-      "estimated_minutes": 40,
-      "area": "Staré Město, Prague",
-      "geometry": { "type": "LineString", "coordinates": [...] },
-      "bbox": [14.4058, 50.0782, 14.4295, 50.0899]
+      "description": "..."
     }
   ],
-  "count": 15
+  "neighborhood": "Karlin",
+  "bbox": [14.44, 50.08, 14.46, 50.10]
 }
 ```
 
-### GET /api/shapes/:id
+## Frontend Architecture
 
-Returns a single shape by ID.
+### State Management
 
-### GET /api/shapes/:id/gpx
+Svelte 5 runes (`$state`, `$derived`, `$effect`) manage all reactive state. No external state library.
 
-Returns a downloadable GPX file for the shape.
+Key state in `+page.svelte`:
+- `mode`: 'generate' | 'describe'
+- `generatedRoute`: The current route result (or null)
+- `showWaypoints`: Toggle for waypoint marker visibility
+- `isRoutingIdea`: Loading state for routing operations
 
-**Response Headers:**
-```
-Content-Type: application/gpx+xml
-Content-Disposition: attachment; filename="ghost-tracks-fox-across-stare-mesto.gpx"
-```
+### Components
 
-### GET /api/shapes/:id/route
+| Component | Role |
+|-----------|------|
+| Map.svelte | Mapbox GL map, route line layer, waypoint markers with popups |
+| ModeSwitcher.svelte | Generate/Describe tab toggle |
+| GeneratePanel.svelte | Neighborhood picker, idea cards, skeleton loaders |
+| DescribePanel.svelte | Text input, neighborhood preference, 4-step progress |
+| RouteInstructions.svelte | Route details, GPX export, alternative neighborhoods, path-only toggle |
+| Toast.svelte | Toast notification rendering |
 
-Returns the routed geometry (snapped to streets) for a shape.
+### Session Persistence
 
-**Response:**
-```json
-{
-  "id": "prague-fox-1",
-  "geometry": { "type": "LineString", "coordinates": [...] },
-  "distance_km": 7.91,
-  "duration_minutes": 95
-}
-```
+Routes are saved to `sessionStorage` under `ghost-tracks-last-route`. On mount, if a saved route exists, it's restored and the map flies to its bounds.
 
-### POST /api/route
+## Prague Neighborhoods
 
-On-demand route snapping for custom waypoints.
-
-**Request Body:**
-```json
-{
-  "waypoints": [[14.42, 50.08], [14.43, 50.09], ...],
-  "profile": "walking"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "coordinates": [[14.42, 50.08], ...],
-  "distance_km": 5.2,
-  "duration_minutes": 62
-}
-```
-
-### POST /api/suggest
-
-AI-powered shape suggestions based on natural language.
-
-**Request Body:**
-```json
-{
-  "prompt": "I want to run a fox shape",
-  "viewport": {
-    "center": [14.4378, 50.0755],
-    "bounds": [14.3, 49.9, 14.6, 50.2]
-  },
-  "preferences": {
-    "distance_min": 3,
-    "distance_max": 10,
-    "categories": ["creature"]
-  }
-}
-```
-
----
-
-## Route Snapping
-
-Routes are snapped to actual streets using the Mapbox Directions API (walking profile).
-
-### How It Works
-
-1. **Waypoint Simplification**: Shape coordinates are simplified to key control points using Douglas-Peucker algorithm
-2. **Directions API**: Waypoints are sent to Mapbox Directions API which returns actual street paths
-3. **Chunking**: Routes with >25 waypoints are chunked into multiple API calls
-4. **Caching**: Results are pre-computed at build time and stored in `prague-shapes-routed.json`
-
-### Generate Routes
-
-```bash
-# Requires MAPBOX_ACCESS_TOKEN in .env.local
-bun run tools/generate-routes.ts
-```
-
----
-
-## Shape Data Format
-
-```typescript
-interface Shape {
-  id: string;                    // Unique identifier
-  name: string;                  // Display name
-  emoji: string;                 // Visual icon
-  category: 'creature' | 'letter' | 'geometric';
-  distance_km: number;           // Route distance
-  difficulty: 'easy' | 'moderate' | 'hard';
-  estimated_minutes: number;     // Walking time
-  area: string;                  // Location description
-  geometry: LineStringGeometry;  // GeoJSON LineString
-  bbox: [minLng, minLat, maxLng, maxLat];
-
-  // Routed properties (optional)
-  routed_geometry?: LineStringGeometry;
-  routed_distance_km?: number;
-  routed_duration_minutes?: number;
-  routing_method?: 'directions' | 'original';
-}
-```
-
----
+| Name | Layout | Good For |
+|------|--------|----------|
+| Stare Mesto | organic | creatures, complex shapes |
+| Mala Strana | organic | creatures, curves |
+| Vinohrady | grid | letters, geometric, pixel art |
+| Zizkov | mixed | stars, abstract |
+| Karlin | grid | letters, geometric, modern |
+| Letna | mixed | hearts, loops, mixed |
+| Holesovice | mixed | stars, abstract, modern |
+| Hradcany | organic | creatures, complex |
+| Nove Mesto | grid | letters, geometric |
+| Josefov | organic | small shapes, simple |
+| Vrsovice | grid | letters, geometric |
+| Smichov | mixed | loops, abstract |
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_MAPBOX_ACCESS_TOKEN` | Yes | Mapbox GL JS token (public, ok to expose) |
-| `MAPBOX_ACCESS_TOKEN` | Build | Server-side token for route generation |
-| `AI_PROVIDER` | No | AI provider: `glm`, `gemini`, `kimi`, `claude` |
-| `GLM_API_KEY` | No | GLM-4.7 API key |
-| `ANTHROPIC_API_KEY` | No | Claude API key |
-
----
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Start dev server
-npm run dev
-
-# Type check
-npm run check
-
-# Build
-npm run build
-
-# Run E2E tests
-npm run test:e2e
-```
-
----
-
-## Deployment
-
-Configured for Vercel with automatic deployments from `main` branch.
-
-```bash
-# Manual deploy
-vercel
-
-# Production deploy
-vercel --prod
-```
+| VITE_MAPBOX_ACCESS_TOKEN | Yes | Mapbox token for frontend map rendering |
+| MAPBOX_ACCESS_TOKEN | Yes | Mapbox token for backend Directions API |
+| GLM_API_KEY | Yes | ZhipuAI API key for GLM-4-plus LLM |
+| SHAPE_VALIDATION_THRESHOLD | No | Min similarity score to pass (default: 45) |

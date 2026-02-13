@@ -28,6 +28,8 @@ export default defineConfig({
 	// Development server configuration
 	server: {
 		// Allow access from mobile devices on same network
-		host: true
+		host: true,
+		// Allow tunnel hostnames (e.g. cloudflared)
+		allowedHosts: ['.trycloudflare.com']
 	}
 });

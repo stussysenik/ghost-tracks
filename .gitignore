@@ -25,3 +25,9 @@ vite.config.ts.timestamp-*
 # Test artifacts
 playwright-report/
 test-results/
+
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+*.egg-info/

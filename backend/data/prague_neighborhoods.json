@@ -1,0 +1,110 @@
+[
+  {
+    "name": "Staré Město",
+    "name_cs": "Staré Město",
+    "center": [14.4205, 50.0875],
+    "bbox": [14.4100, 50.0800, 14.4350, 50.0930],
+    "street_layout": "organic",
+    "character": "Medieval winding streets around Old Town Square, dense with alleys and passages",
+    "good_for": ["creatures", "organic curves", "small detailed shapes"]
+  },
+  {
+    "name": "Malá Strana",
+    "name_cs": "Malá Strana",
+    "center": [14.4040, 50.0870],
+    "bbox": [14.3930, 50.0810, 14.4150, 50.0930],
+    "street_layout": "organic",
+    "character": "Cobblestone streets below Prague Castle, hilly terrain with charming gardens",
+    "good_for": ["creatures", "curved shapes", "scenic routes"]
+  },
+  {
+    "name": "Vinohrady",
+    "name_cs": "Vinohrady",
+    "center": [14.4439, 50.0753],
+    "bbox": [14.4250, 50.0650, 14.4650, 50.0850],
+    "street_layout": "grid",
+    "character": "Elegant residential area with tree-lined avenues and Art Nouveau architecture",
+    "good_for": ["letters", "geometric shapes", "clean lines", "grid patterns"]
+  },
+  {
+    "name": "Žižkov",
+    "name_cs": "Žižkov",
+    "center": [14.4500, 50.0830],
+    "bbox": [14.4350, 50.0750, 14.4650, 50.0920],
+    "street_layout": "mixed",
+    "character": "Bohemian district with semi-grid streets and the iconic TV Tower",
+    "good_for": ["letters", "abstract shapes", "creative routes"]
+  },
+  {
+    "name": "Karlín",
+    "name_cs": "Karlín",
+    "center": [14.4500, 50.0900],
+    "bbox": [14.4380, 50.0850, 14.4650, 50.0960],
+    "street_layout": "grid",
+    "character": "Modern revitalized district with clean grid streets and contemporary architecture",
+    "good_for": ["geometric shapes", "letters", "triangles", "squares"]
+  },
+  {
+    "name": "Letná",
+    "name_cs": "Letná",
+    "center": [14.4220, 50.0980],
+    "bbox": [14.4100, 50.0940, 14.4380, 50.1050],
+    "street_layout": "mixed",
+    "character": "Park-meets-residential with wide paths and stunning city panoramas",
+    "good_for": ["hearts", "large curves", "scenic shapes", "circles"]
+  },
+  {
+    "name": "Holešovice",
+    "name_cs": "Holešovice",
+    "center": [14.4350, 50.1050],
+    "bbox": [14.4200, 50.0980, 14.4550, 50.1120],
+    "street_layout": "grid",
+    "character": "Industrial-turned-artsy district with wide boulevards and river access",
+    "good_for": ["arrows", "geometric shapes", "large letters", "stars"]
+  },
+  {
+    "name": "Hradčany",
+    "name_cs": "Hradčany",
+    "center": [14.3950, 50.0910],
+    "bbox": [14.3850, 50.0870, 14.4050, 50.0960],
+    "street_layout": "organic",
+    "character": "Castle district with sparse winding streets and royal gardens",
+    "good_for": ["creatures", "crowns", "small organic shapes"]
+  },
+  {
+    "name": "Nové Město",
+    "name_cs": "Nové Město",
+    "center": [14.4280, 50.0770],
+    "bbox": [14.4150, 50.0680, 14.4420, 50.0860],
+    "street_layout": "mixed",
+    "character": "Wide boulevards including Wenceslas Square, mix of old and new",
+    "good_for": ["arrows", "letters", "mixed shapes", "large routes"]
+  },
+  {
+    "name": "Josefov",
+    "name_cs": "Josefov",
+    "center": [14.4180, 50.0900],
+    "bbox": [14.4130, 50.0880, 14.4240, 50.0930],
+    "street_layout": "organic",
+    "character": "Historic Jewish Quarter with tight organic streets, compact area",
+    "good_for": ["small creatures", "stars", "compact shapes"]
+  },
+  {
+    "name": "Vršovice",
+    "name_cs": "Vršovice",
+    "center": [14.4580, 50.0670],
+    "bbox": [14.4450, 50.0580, 14.4720, 50.0750],
+    "street_layout": "grid",
+    "character": "Residential grid neighborhood with quiet streets perfect for long routes",
+    "good_for": ["letters", "geometric shapes", "circles", "large patterns"]
+  },
+  {
+    "name": "Smíchov",
+    "name_cs": "Smíchov",
+    "center": [14.4050, 50.0700],
+    "bbox": [14.3900, 50.0600, 14.4200, 50.0800],
+    "street_layout": "mixed",
+    "character": "Mix of industrial heritage and modern development along the Vltava river",
+    "good_for": ["mixed shapes", "creatures", "river-following routes"]
+  }
+]

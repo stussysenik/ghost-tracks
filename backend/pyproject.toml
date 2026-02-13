@@ -1,0 +1,12 @@
+[project]
+name = "ghost-tracks-backend"
+version = "2.0.0"
+description = "Ghost Tracks - Dynamic Strava Art Generation Backend"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

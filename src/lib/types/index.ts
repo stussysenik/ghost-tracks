@@ -220,6 +220,82 @@ export interface GPXExportOptions {
 }
 
 // ============================================================================
+// DYNAMIC GENERATION TYPES (v2)
+// ============================================================================
+
+/** App mode: generate from neighborhood or describe a shape */
+export type AppMode = 'generate' | 'describe';
+
+/** A shape idea returned by the generation backend */
+export interface ShapeIdea {
+	name: string;
+	description: string;
+	emoji: string;
+	estimated_distance_km: number;
+	difficulty: string;
+	control_points: { lng: number; lat: number }[];
+	target_area: string;
+}
+
+/** A numbered waypoint with turn instruction */
+export interface WaypointMarker {
+	index: number;
+	lng: number;
+	lat: number;
+	instruction: string;
+}
+
+/** A fully generated and routed route */
+export interface GeneratedRoute {
+	shape: ShapeIdea;
+	routed_coordinates: [number, number][];
+	distance_km: number;
+	duration_minutes: number;
+	waypoints: WaypointMarker[];
+	similarity_score: number;
+	neighborhood: string;
+	bbox: BoundingBox;
+	alternative_neighborhoods?: string[];
+}
+
+/** Toast notification type */
+export type ToastType = 'info' | 'success' | 'warning' | 'error';
+
+/** Toast notification */
+export interface Toast {
+	id: string;
+	type: ToastType;
+	message: string;
+}
+
+/** Response from POST /api/generate */
+export interface GenerateResponse {
+	ideas: ShapeIdea[];
+	neighborhood: string;
+	bbox: { min_lng: number; min_lat: number; max_lng: number; max_lat: number };
+}
+
+/** Response from POST /api/describe */
+export interface DescribeResponse {
+	shape: ShapeIdea;
+	neighborhood: string;
+	bbox: { min_lng: number; min_lat: number; max_lng: number; max_lat: number };
+	similarity_score: number;
+	routed_coordinates: [number, number][];
+	distance_km: number;
+	duration_minutes: number;
+	waypoints: WaypointMarker[];
+	alternative_neighborhoods?: string[];
+}
+
+/** Neighborhood option for the picker */
+export interface NeighborhoodOption {
+	value: string;
+	label: string;
+	icon: string;
+}
+
+// ============================================================================
 // UTILITY TYPES
 // ============================================================================
 

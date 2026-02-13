@@ -1,135 +1,88 @@
 <script lang="ts">
 	/**
-	 * Ghost Tracks - Map Component
+	 * Ghost Tracks v2 - Map Component
+	 *
+	 * Displays the Mapbox map with:
+	 * - A generated route as a blue line
+	 * - Numbered waypoint markers at turn points
 	 */
 	import { onMount, onDestroy } from 'svelte';
 	import { writable, get } from 'svelte/store';
 	import mapboxgl from 'mapbox-gl';
-	import type { Shape, ShapeFeatureCollection, BoundingBox, LineStringGeometry } from '$types';
+	import type { LineStringGeometry, BoundingBox, WaypointMarker } from '$types';
 
 	interface Props {
 		accessToken: string;
 		center?: [number, number];
 		zoom?: number;
-		shapes?: Shape[];
-		selectedShape?: Shape | null;
-		selectedRouteGeometry?: LineStringGeometry | null;
-		showRoutes?: boolean;
-		onViewportChange?: (bounds: BoundingBox) => void;
-		onShapeClick?: (shape: Shape) => void;
+		routeGeometry?: LineStringGeometry | null;
+		waypoints?: WaypointMarker[];
+		showWaypoints?: boolean;
 	}
 
 	let {
 		accessToken,
 		center = [14.4378, 50.0755],
 		zoom = 13,
-		shapes = [],
-		selectedShape = null,
-		selectedRouteGeometry = null,
-		showRoutes = true,
-		onViewportChange,
-		onShapeClick
+		routeGeometry = null,
+		waypoints = [],
+		showWaypoints = true
 	}: Props = $props();
 
 	let mapContainer: HTMLDivElement;
 	let loadingOverlay: HTMLDivElement;
 	let map: mapboxgl.Map | null = null;
 	const isMapLoaded = writable(false);
+	let waypointMarkers: mapboxgl.Marker[] = [];
 
-	const GHOST_LAYER_ID = 'ghost-routes';
-	const GHOST_SOURCE_ID = 'ghost-routes-source';
-	const SELECTED_LAYER_ID = 'selected-route';
-	const SELECTED_SOURCE_ID = 'selected-route-source';
+	const ROUTE_LAYER_ID = 'generated-route';
+	const ROUTE_SOURCE_ID = 'generated-route-source';
 
-	function shapesToGeoJSON(shapes: Shape[]): ShapeFeatureCollection {
-		return {
-			type: 'FeatureCollection',
-			features: shapes.map(shape => ({
-				type: 'Feature',
-				id: shape.id,
-				properties: {
-					id: shape.id,
-					name: shape.name,
-					emoji: shape.emoji,
-					category: shape.category,
-					distance_km: shape.distance_km,
-					difficulty: shape.difficulty,
-					estimated_minutes: shape.estimated_minutes,
-					area: shape.area,
-					description: shape.description
-				},
-				geometry: shape.geometry,
-				bbox: shape.bbox
-			}))
-		};
-	}
-
-	function selectedToGeoJSON(shape: Shape, geometry?: LineStringGeometry | null): ShapeFeatureCollection {
-		return {
-			type: 'FeatureCollection',
-			features: [
-				{
-					type: 'Feature',
-					id: shape.id,
-					properties: {
-						id: shape.id,
-						name: shape.name,
-						emoji: shape.emoji,
-						category: shape.category,
-						distance_km: shape.distance_km,
-						difficulty: shape.difficulty,
-						estimated_minutes: shape.estimated_minutes,
-						area: shape.area,
-						description: shape.description
-					},
-					geometry: geometry ?? shape.geometry,
-					bbox: shape.bbox
-				}
-			]
-		};
-	}
-
-	function getBounds(): BoundingBox {
-		if (!map) return [0, 0, 0, 0];
-		const bounds = map.getBounds();
-		if (!bounds) return [0, 0, 0, 0];
-		return [
-			bounds.getWest(),
-			bounds.getSouth(),
-			bounds.getEast(),
-			bounds.getNorth()
-		];
-	}
-
-	function updateGhostRoutes(shapes: Shape[]) {
+	function updateRoute(geometry: LineStringGeometry | null) {
 		if (!map || !get(isMapLoaded)) return;
-		const source = map.getSource(GHOST_SOURCE_ID) as mapboxgl.GeoJSONSource;
-		if (source) {
-			source.setData(shapesToGeoJSON(shapes));
-		}
-	}
-
-	function updateSelectedRoute(shape: Shape | null, geometry?: LineStringGeometry | null) {
-		if (!map || !get(isMapLoaded)) return;
-		const source = map.getSource(SELECTED_SOURCE_ID) as mapboxgl.GeoJSONSource;
+		const source = map.getSource(ROUTE_SOURCE_ID) as mapboxgl.GeoJSONSource;
 		if (!source) return;
 
-		if (!shape) {
+		if (!geometry) {
 			source.setData({ type: 'FeatureCollection', features: [] });
 			return;
 		}
 
-		source.setData(selectedToGeoJSON(shape, geometry));
+		source.setData({
+			type: 'FeatureCollection',
+			features: [
+				{
+					type: 'Feature',
+					properties: {},
+					geometry: geometry
+				}
+			]
+		});
 	}
 
-	function updateVisibility(visible: boolean) {
-		if (!map || !get(isMapLoaded)) return;
-		const visibility = visible ? 'visible' : 'none';
-		if (map.getLayer(GHOST_LAYER_ID)) {
-			map.setLayoutProperty(GHOST_LAYER_ID, 'visibility', visibility);
-		}
-		if (map.getLayer(SELECTED_LAYER_ID)) {
-			map.setLayoutProperty(SELECTED_LAYER_ID, 'visibility', visibility);
+	function updateWaypoints(wps: WaypointMarker[]) {
+		// Remove old markers
+		waypointMarkers.forEach((m) => m.remove());
+		waypointMarkers = [];
+
+		if (!map || !get(isMapLoaded) || wps.length === 0) return;
+
+		for (const wp of wps) {
+			const el = document.createElement('div');
+			el.className = 'waypoint-marker';
+			el.setAttribute('data-testid', 'waypoint-marker');
+			el.textContent = String(wp.index);
+
+			const popup = new mapboxgl.Popup({ offset: 25, closeButton: false }).setText(
+				wp.instruction
+			);
+
+			const marker = new mapboxgl.Marker({ element: el })
+				.setLngLat([wp.lng, wp.lat])
+				.setPopup(popup)
+				.addTo(map);
+
+			waypointMarkers.push(marker);
 		}
 	}
 
@@ -151,10 +104,7 @@
 			preserveDrawingBuffer: false
 		});
 
-		map.addControl(
-			new mapboxgl.NavigationControl({ showCompass: false }),
-			'top-right'
-		);
+		map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'top-right');
 
 		map.addControl(
 			new mapboxgl.GeolocateControl({
@@ -165,49 +115,24 @@
 			'top-right'
 		);
 
-		map.addControl(
-			new mapboxgl.ScaleControl({ maxWidth: 100 }),
-			'bottom-left'
-		);
+		map.addControl(new mapboxgl.ScaleControl({ maxWidth: 100 }), 'bottom-left');
 
 		map.on('load', () => {
 			isMapLoaded.set(true);
-			// Hide loading overlay directly (workaround for Svelte 5 store reactivity)
 			if (loadingOverlay) {
 				loadingOverlay.style.opacity = '0';
 				loadingOverlay.style.pointerEvents = 'none';
 			}
 
-			map!.addSource(GHOST_SOURCE_ID, {
-				type: 'geojson',
-				data: shapesToGeoJSON(shapes)
-			});
-
-			map!.addLayer({
-				id: GHOST_LAYER_ID,
-				type: 'line',
-				source: GHOST_SOURCE_ID,
-				paint: {
-					'line-color': '#FF6B35',
-					'line-width': 3,
-					'line-opacity': 0.35,
-					'line-blur': 1
-				},
-				layout: {
-					'line-cap': 'round',
-					'line-join': 'round'
-				}
-			});
-
-			map!.addSource(SELECTED_SOURCE_ID, {
+			map!.addSource(ROUTE_SOURCE_ID, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] }
 			});
 
 			map!.addLayer({
-				id: SELECTED_LAYER_ID,
+				id: ROUTE_LAYER_ID,
 				type: 'line',
-				source: SELECTED_SOURCE_ID,
+				source: ROUTE_SOURCE_ID,
 				paint: {
 					'line-color': '#3B82F6',
 					'line-width': 5,
@@ -219,69 +144,54 @@
 				}
 			});
 
-			updateVisibility(showRoutes);
-			onViewportChange?.(getBounds());
+			// Apply initial route if any
+			updateRoute(routeGeometry);
+			updateWaypoints(waypoints);
 		});
+	});
 
-		map.on('moveend', () => {
-			if (get(isMapLoaded)) {
-				onViewportChange?.(getBounds());
+	$effect(() => {
+		updateRoute(routeGeometry);
+	});
+
+	$effect(() => {
+		updateWaypoints(waypoints);
+	});
+
+	$effect(() => {
+		// Read showWaypoints outside the loop so Svelte always tracks it,
+		// even when waypointMarkers is empty on first run.
+		const show = showWaypoints;
+		for (const m of waypointMarkers) {
+			m.getElement().style.display = show ? '' : 'none';
+			const popup = m.getPopup();
+			if (!show && popup?.isOpen()) {
+				m.togglePopup();
 			}
-		});
-
-		map.on('click', GHOST_LAYER_ID, (e) => {
-			if (!showRoutes) return;
-			if (e.features && e.features.length > 0) {
-				const clickedFeature = e.features[0];
-				const shapeId = clickedFeature.properties?.id;
-				const clickedShape = shapes.find(s => s.id === shapeId);
-				if (clickedShape) {
-					onShapeClick?.(clickedShape);
-				}
-			}
-		});
-
-		map.on('mouseenter', GHOST_LAYER_ID, () => {
-			if (map) map.getCanvas().style.cursor = 'pointer';
-		});
-
-		map.on('mouseleave', GHOST_LAYER_ID, () => {
-			if (map) map.getCanvas().style.cursor = '';
-		});
-	});
-
-	$effect(() => {
-		updateGhostRoutes(shapes);
-	});
-
-	$effect(() => {
-		updateSelectedRoute(selectedShape, selectedRouteGeometry);
-	});
-
-	$effect(() => {
-		updateVisibility(showRoutes);
+		}
 	});
 
 	onDestroy(() => {
+		waypointMarkers.forEach((m) => m.remove());
 		if (map) {
 			map.remove();
 			map = null;
 		}
 	});
 
-	export function flyToShape(shape: Shape) {
+	export function flyToBounds(bbox: BoundingBox) {
 		if (!map || !get(isMapLoaded)) return;
-		map.fitBounds(shape.bbox as mapboxgl.LngLatBoundsLike, {
-			padding: 50,
+		map.fitBounds(bbox as mapboxgl.LngLatBoundsLike, {
+			padding: 60,
 			duration: 1000
 		});
 	}
 
-	export function flyTo(lng: number, lat: number, zoom?: number) {
+	export function flyTo(lng: number, lat: number, z?: number) {
 		if (!map || !get(isMapLoaded)) return;
 		map.flyTo({
 			center: [lng, lat],
-			zoom: zoom ?? map.getZoom(),
+			zoom: z ?? map.getZoom(),
 			duration: 1000
 		});
 	}
@@ -291,7 +201,7 @@
 	bind:this={mapContainer}
 	class="absolute inset-0 w-full h-full"
 	role="application"
-	aria-label="Interactive map showing ghost routes"
+	aria-label="Interactive map showing generated route"
 ></div>
 
 <div
@@ -305,7 +215,23 @@
 </div>
 
 <style>
-	div[role="application"] {
+	div[role='application'] {
 		z-index: var(--z-map, 0);
+	}
+
+	:global(.waypoint-marker) {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		background: #ff6b35;
+		color: white;
+		font-size: 12px;
+		font-weight: 700;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 2px solid white;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
 	}
 </style>
