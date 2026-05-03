@@ -14,6 +14,12 @@
 	import RouteInstructions from '$components/RouteInstructions.svelte';
 	import Toast from '$components/Toast.svelte';
 	import { addToast } from '$lib/stores/toasts.svelte';
+	import { useMachine } from '@xstate/svelte';
+	import { generationMachine } from '$lib/machines/generation';
+	import ConstraintLayout from '$components/ConstraintLayout.svelte';
+
+	const { snapshot, send } = useMachine(generationMachine);
+
 	import type {
 		AppMode,
 		ShapeIdea,
@@ -236,6 +242,11 @@
 	<!-- Top controls -->
 	<div class="absolute top-0 left-0 right-0 safe-top z-20 pointer-events-none">
 		<div class="p-4 space-y-3 pointer-events-auto max-w-lg">
+			<!-- Constraint-based layout example -->
+			<div class="glass rounded-xl overflow-hidden mb-2">
+				<ConstraintLayout />
+			</div>
+
 			<div class="flex items-center gap-3">
 				<div class="text-xl font-bold text-slate-800 glass rounded-full px-3 py-1.5">👻</div>
 				<ModeSwitcher {mode} onModeChange={handleModeChange} />

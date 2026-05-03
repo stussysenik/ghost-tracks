@@ -5,12 +5,16 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+import logfire
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Load .env.local from the project root (one level up from backend/)
 _project_root = Path(__file__).resolve().parent.parent
 load_dotenv(_project_root / ".env.local")
+
+# Configure logfire
+logfire.configure(send_to_logfire=False)
 
 # Allow imports from backend root when running as `uvicorn main:app`
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -22,6 +26,8 @@ app = FastAPI(
     version="2.0.0",
     description="Dynamic Strava art route generation for Prague",
 )
+
+logfire.instrument_fastapi(app)
 
 app.add_middleware(
     CORSMiddleware,

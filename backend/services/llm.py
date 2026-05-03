@@ -12,19 +12,27 @@ from models.schemas import Coordinate
 
 
 def configure_llm() -> Optional[dspy.LM]:
-    """Configure DSPy with GLM-4.7 if API key is available."""
-    api_key = os.environ.get("GLM_API_KEY")
+    """Configure DSPy with an available LLM."""
+    # Priority: NVIDIA -> OpenAI/GLM
+    if "NVIDIA_NIM_API_KEY" in os.environ:
+        api_key = os.environ["NVIDIA_NIM_API_KEY"]
+        lm = dspy.NVIDIA(model="nvidia/llama3-70b-instruct", api_key=api_key)
+        dspy.configure(lm=lm)
+        print("✅ DSPy configured with NVIDIA NIM")
+        return lm
+    
+    api_key = os.environ.get("GLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
+        print("⚠️ No LLM API key found, DSPy is disabled.")
         return None
 
     lm = dspy.LM(
         model="openai/glm-4-plus",
         api_key=api_key,
         api_base="https://open.bigmodel.cn/api/paas/v4/",
-        timeout=10,
-        num_retries=1,
     )
     dspy.configure(lm=lm)
+    print("✅ DSPy configured with GLM")
     return lm
 
 

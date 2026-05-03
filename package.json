@@ -8,6 +8,8 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"lint": "oxlint .",
+		"doctor": "ruby scripts/doctor.rb",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "playwright test",
@@ -24,6 +26,7 @@
 		"@types/mapbox-gl": "^3.4.1",
 		"autoprefixer": "^10.4.24",
 		"dotenv": "^17.2.4",
+		"oxlint": "^1.62.0",
 		"postcss": "^8.5.6",
 		"svelte": "^5.49.2",
 		"svelte-check": "^4.3.6",
@@ -32,7 +35,10 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@xstate/svelte": "^5.0.0",
+		"cassowary": "^0.0.2",
 		"gpx-builder": "^6.0.0",
-		"mapbox-gl": "^3.18.1"
+		"mapbox-gl": "^3.18.1",
+		"xstate": "^5.31.0"
 	}
 }
