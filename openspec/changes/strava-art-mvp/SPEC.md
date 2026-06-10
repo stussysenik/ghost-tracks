@@ -34,8 +34,8 @@ The "ChatGPT for runners": a user *describes* an occasion in natural language �
 
 ### In (MVP)
 - NL describe → intent parse (text-to-write, shapes, occasion, area, distance, loop preference).
-- Text→path via **Hershey-style single-stroke glyphs**, street-grid simplified; shape library (heart, star, etc.) + LLM-generated control points for novel shapes.
-- **Composer**: lays out strokes in unit canvas; orders strokes; inserts baseline/retrace connectors → ONE continuous polyline.
+- **Open-ended design via the compiler model (§6): any input compiles to one StrokeSet IR.** MVP ships three frontends — glyphs (text), templates (known shapes), LLM-path (novel concepts) — plus the **Normalizer** that adapts any IR to the medium laws (§6.2). The image-trace frontend (universal fallback) is P4 but plugs into the same IR with zero pipeline rework (vtracer + OpenCV already installed in `backend/`).
+- **Composer**: lays out strokes in unit canvas; orders strokes (min-connector-cost graph problem); inserts baseline/retrace connectors → ONE continuous polyline.
 - **Placement**: bbox + rotation + scale onto chosen neighborhood (drag/scale/rotate on map).
 - **Solve**: continuous polyline → street-snapped route (Scala kernel via GraphHopper; Mapbox fallback), optional loop closure, fidelity scoring, iterative tightening (existing Python validator).
 - **Refine UI**: draggable control points, live re-solve, undo/redo, score meter.
@@ -70,6 +70,44 @@ flowchart LR
 - **Legacy `src/` SvelteKit app: frozen as reference; retired at MVP parity.** Its API endpoints' contracts are ported to the gateway.
 
 ## 6. The functional kernel — core abstraction
+
+### 6.1 The compiler model — how "any design" works
+
+We do not constrain the design's *subject*; we constrain the *medium*, and we structure generation as a compiler: **many frontends → one closed IR → one backend.**
+
+```
+Frontends (anything → StrokeSet IR)            determinism
+  text          → Hershey single-stroke glyphs  exact
+  known shape   → parametric template            exact
+  novel concept → LLM-generated path             variable
+  any image     → vtracer contour trace          universal (P4; deps installed)
+
+IR         StrokeSet: Stroke[] in unit space — the ONLY format downstream sees
+Normalizer IR → drawable IR: simplify to street resolution (Douglas-Peucker),
+           prune sub-jitter detail, merge/prune strokes, scale to distance budget
+Composer   order strokes + insert connectors/retraces → ONE continuous line
+Backend    place → project → solve → score → tighten (unchanged for all frontends)
+```
+
+A new kind of input is a new frontend emitting IR — never a pipeline change. "Anything" is covered today by the LLM-path frontend (variable quality) and upgraded later by image-trace (anything an image model can render, vtracer can stroke).
+
+### 6.2 Medium laws — the real constraints
+
+The constraints are physics of streets + GPS + human legs, not product choices. The **Normalizer enforces them by adaptation** (lossy compilation — like printing any image on a dot-matrix printer); the **validator forecasts and explains** what survives:
+
+| # | Law | Consequence |
+|---|-----|-------------|
+| 1 | Continuity — a run is one track | every extra stroke costs connector ink; stroke ordering is a min-connector-cost graph problem |
+| 2 | Line-art only — no fill/shading | regions read by outline only |
+| 3 | Resolution limit — streets sample the plane at block frequency | min feature ≈ 2–3 blocks; sub-GPS-jitter (~20 m) detail vanishes (a Nyquist limit) |
+| 4 | Piecewise-linearity — streets are straight segments | curves become polygons; design must survive simplification |
+| 5 | Graph connectivity | water/highways/campuses are forbidden zones; solver failures map to "move/rotate/rescale" advice |
+| 6 | Length budget — 5–25 km human range | caps total ink + connectors; detail trades against distance |
+| 7 | Stroke budget | many disconnected components degrade into connector noise |
+
+Every diagnostic is actionable and tied to a design knob: *scale up · reduce detail · move area · split into multiple runs · accept N km*. No design is rejected outright — it is adapted, scored, and explained.
+
+### 6.3 Types
 
 State is a pure function of (Plan, Placement, SolveResult); every stage is a total function with explicit types. TS (zod), Python (pydantic), Scala (case classes) mirror these:
 
@@ -120,7 +158,7 @@ Pipeline: `parse(text) → Intent`, `compose(Intent) → ArtPlan`, `place(ArtPla
 ## 11. Phasing
 
 1. **P0 Foundation:** scaffold `web/` (Vite+React+UnoCSS+styled-components+Radix+XState), port map view + `/api/route` parity through gateway. *Gate: map renders, old describe flow callable from React.*
-2. **P1 Compose:** Python intent parse + Hershey glyphs + composer (strokes→continuous line) + preview SVG. *Gate: "ANNA + TOM + heart" composes correctly as one line, unit-tested.*
+2. **P1 Compose:** Python intent parse + the three MVP frontends (glyphs, templates, LLM-path) emitting StrokeSet IR + Normalizer (medium laws) + composer (strokes→continuous line) + preview SVG. *Gate: "ANNA + TOM + heart" composes correctly as one line, unit-tested; an arbitrary LLM-path concept ("a fox") normalizes without pipeline changes.*
 3. **P2 Place & Solve:** Scala `/solve` + placement gizmo + live re-solve + fidelity meter. *Gate: composed art lands on Prague streets ≥ target fidelity.*
 4. **P3 Refine & Ship:** control-point editing, undo/redo, GPX + share links, polish pass, e2e green. *Gate: §3 scenario under 2 minutes; Playwright passing.*
 5. **P4 (post-MVP spec):** pre-solved areas/runner habits, gif export, accounts.
@@ -129,7 +167,7 @@ Pipeline: `parse(text) → Intent`, `compose(Intent) → ArtPlan`, `place(ArtPla
 
 - **Rewrite tax (accepted by decision):** map + flows re-ported to React before new value ships — mitigated by P0 gate and frozen Svelte reference.
 - **styled-components is in maintenance mode** (2025 announcement): accepted consciously; isolate via design-tokens so a future swap is mechanical.
-- **Composition hard cases** (cursive intent, dense text in organic streets): constrain MVP to uppercase single-stroke letterforms + shape library; warn early via legibility guards.
+- **Composition hard cases** (cursive intent, dense text in organic streets): the Normalizer adapts rather than rejects — MVP letterforms are uppercase single-stroke; harder inputs degrade gracefully to LLM-path with explicit fidelity forecast + diagnostics, never a hard "no".
 - **Kernel hosting:** GraphHopper graph is stateful/in-memory → needs an always-on host at release (Fly/Railway); Python can be serverless; web on Vercel.
 - **LLM dependence:** glyphs + templates are deterministic; LLM is only required for novel shapes and intent parsing — degrade gracefully to template picker.
 
