@@ -263,6 +263,63 @@ export async function getDirectionsRoute(waypoints: Coord[]): Promise<Directions
 	}
 }
 
+/**
+ * Snap waypoints to streets via the local GraphHopper matcher service.
+ *
+ * Drop-in alternative to {@link getDirectionsRoute} — same DirectionsResult shape — but the
+ * matcher is LOCAL and DETERMINISTIC (fixed OSM extract + pinned GraphHopper version), unlike
+ * the Mapbox black box. Used when ROUTING_BACKEND=graphhopper. See the `matcher/` service.
+ */
+export async function getGraphHopperRoute(waypoints: Coord[]): Promise<DirectionsResult> {
+	const base = env.MATCHER_URL || 'http://localhost:8080';
+
+	if (waypoints.length < 2) {
+		return {
+			coordinates: waypoints,
+			distance_km: 0,
+			duration_minutes: 0,
+			success: false,
+			error: 'At least 2 waypoints required'
+		};
+	}
+
+	try {
+		const res = await fetch(`${base}/match`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ waypoints, profile: ROUTING_PROFILE })
+		});
+		const data = await res.json();
+		return {
+			coordinates: data.coordinates ?? waypoints,
+			distance_km: data.distance_km ?? 0,
+			duration_minutes: data.duration_minutes ?? 0,
+			success: data.success === true,
+			error: data.error ?? undefined
+		};
+	} catch (error) {
+		console.error('GraphHopper matcher error:', error);
+		return {
+			coordinates: waypoints,
+			distance_km: 0,
+			duration_minutes: 0,
+			success: false,
+			error: error instanceof Error ? error.message : 'Matcher unreachable'
+		};
+	}
+}
+
+/**
+ * Route a shape onto real streets via the configured backend.
+ * Default is Mapbox; set ROUTING_BACKEND=graphhopper to use the local deterministic matcher.
+ */
+export async function snapToStreets(waypoints: Coord[]): Promise<DirectionsResult> {
+	if (env.ROUTING_BACKEND === 'graphhopper') {
+		return getGraphHopperRoute(waypoints);
+	}
+	return getDirectionsRoute(waypoints);
+}
+
 async function fetchDirections(waypoints: Coord[], token: string): Promise<DirectionsResult> {
 	const coordsString = waypoints.map(([lng, lat]) => `${lng},${lat}`).join(';');
 

@@ -16,9 +16,17 @@ def configure_llm() -> Optional[dspy.LM]:
     # Priority: NVIDIA -> OpenAI/GLM
     if "NVIDIA_NIM_API_KEY" in os.environ:
         api_key = os.environ["NVIDIA_NIM_API_KEY"]
-        lm = dspy.NVIDIA(model="nvidia/llama3-70b-instruct", api_key=api_key)
+        # NVIDIA NIM exposes an OpenAI-compatible API. Modern DSPy (>=2.5) has no `dspy.NVIDIA`
+        # class — route through dspy.LM via LiteLLM's openai provider pointed at NIM's base URL.
+        # Model id is overridable so you can switch catalog models without a code change.
+        model = os.environ.get("NVIDIA_NIM_MODEL", "meta/llama-3.1-70b-instruct")
+        lm = dspy.LM(
+            model=f"openai/{model}",
+            api_key=api_key,
+            api_base="https://integrate.api.nvidia.com/v1",
+        )
         dspy.configure(lm=lm)
-        print("✅ DSPy configured with NVIDIA NIM")
+        print(f"✅ DSPy configured with NVIDIA NIM ({model})")
         return lm
     
     api_key = os.environ.get("GLM_API_KEY") or os.environ.get("OPENAI_API_KEY")

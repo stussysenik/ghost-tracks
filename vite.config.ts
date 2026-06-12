@@ -27,6 +27,11 @@ export default defineConfig({
 
 	// Development server configuration
 	server: {
+		// Pin a dedicated port so the dev URL is ALWAYS the same address.
+		// strictPort makes startup FAIL LOUDLY if 5180 is taken (by another project)
+		// instead of silently roaming to 5181/5182 — no more "which localhost is it?"
+		port: 5180,
+		strictPort: true,
 		// Allow access from mobile devices on same network
 		host: true,
 		// Allow tunnel hostnames (e.g. cloudflared)

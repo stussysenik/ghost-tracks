@@ -1,0 +1,6 @@
+# Routes for the matcher service.
+# NOTE: the action is named `matchRoute` — `match` is a reserved word in Scala.
+
+GET   /health   controllers.MatchController.health()
+POST  /match    controllers.MatchController.matchRoute()
+POST  /solve    controllers.SolveController.solve()

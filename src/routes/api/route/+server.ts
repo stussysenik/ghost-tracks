@@ -11,7 +11,7 @@
  */
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getDirectionsRoute } from '$services/routing';
+import { snapToStreets } from '$services/routing';
 
 interface RouteRequest {
 	waypoints: [number, number][];
@@ -60,8 +60,9 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		}
 
-		// Get routed path
-		const result = await getDirectionsRoute(body.waypoints);
+		// Get routed path via the configured backend (Mapbox, or the local GraphHopper
+		// matcher when ROUTING_BACKEND=graphhopper).
+		const result = await snapToStreets(body.waypoints);
 
 		if (!result.success) {
 			return json(

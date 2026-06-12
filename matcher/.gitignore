@@ -1,0 +1,13 @@
+# sbt / Play build output
+/target/
+/project/target/
+/project/project/
+.bsp/
+
+# Runtime
+/logs/
+*.log
+RUNNING_PID
+
+# OSM data + built routing graph (large, regenerated via scripts/fetch-osm.sh)
+/data/
