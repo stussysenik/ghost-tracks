@@ -36,7 +36,6 @@
 	},
 	"dependencies": {
 		"@xstate/svelte": "^5.0.0",
-		"cassowary": "^0.0.2",
 		"gpx-builder": "^6.0.0",
 		"mapbox-gl": "^3.18.1",
 		"xstate": "^5.31.0"

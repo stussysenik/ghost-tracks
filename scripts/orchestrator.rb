@@ -1,7 +1,7 @@
 require 'json'
 
-# This script acts as the "glue" for high-level tasks.
-# It can orchestrate between the Hono API, Python services, and Rust/Zig modules.
+# This script acts as the "glue" for high-level tasks across the
+# SvelteKit frontend and the Python (FastAPI) backend.
 
 def summarize_shapes(data_dir)
   puts "🔍 Analyzing shapes in #{data_dir}..."
@@ -20,9 +20,11 @@ def summarize_shapes(data_dir)
 end
 
 REQUIRED_KEYS = %w[
+  CEREBRAS_API_KEY
+  MAPBOX_ACCESS_TOKEN
   VITE_MAPBOX_ACCESS_TOKEN
-  OPENAI_API_KEY
   BACKEND_URL
+  POLAR_ACCESS_TOKEN
 ]
 
 def check_env

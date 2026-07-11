@@ -6,10 +6,12 @@
 	 * - A generated route as a blue line
 	 * - Numbered waypoint markers at turn points
 	 */
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { writable, get } from 'svelte/store';
 	import mapboxgl from 'mapbox-gl';
 	import type { LineStringGeometry, BoundingBox, WaypointMarker } from '$types';
+	import { getArea, getFlyNonce, setArea, setAreaLabel } from '$lib/stores/area.svelte';
+	import { reverseGeocode } from '$lib/services/geocoding';
 
 	interface Props {
 		accessToken: string;
@@ -34,6 +36,7 @@
 	let map: mapboxgl.Map | null = null;
 	const isMapLoaded = writable(false);
 	let waypointMarkers: mapboxgl.Marker[] = [];
+	let areaMarker: mapboxgl.Marker | null = null;
 
 	const ROUTE_LAYER_ID = 'generated-route';
 	const ROUTE_SOURCE_ID = 'generated-route-source';
@@ -117,6 +120,15 @@
 
 		map.addControl(new mapboxgl.ScaleControl({ maxWidth: 100 }), 'bottom-left');
 
+		// Click anywhere to drop an area pin; label it via reverse geocoding.
+		map.on('click', async (e) => {
+			const { lng, lat } = e.lngLat;
+			setArea({ lng, lat, label: `Pin (${lat.toFixed(3)}, ${lng.toFixed(3)})` }, { fly: false });
+			const label = await reverseGeocode(lng, lat);
+			const current = getArea();
+			if (current && current.lng === lng && current.lat === lat) setAreaLabel(label);
+		});
+
 		map.on('load', () => {
 			isMapLoaded.set(true);
 			if (loadingOverlay) {
@@ -158,6 +170,38 @@
 		updateWaypoints(waypoints);
 	});
 
+	// Draw / move / remove the area pin as the shared selection changes.
+	$effect(() => {
+		const area = getArea();
+		if (!map || !get(isMapLoaded)) return;
+
+		if (!area) {
+			areaMarker?.remove();
+			areaMarker = null;
+			return;
+		}
+
+		if (!areaMarker) {
+			const el = document.createElement('div');
+			el.className = 'area-pin';
+			el.setAttribute('data-testid', 'area-pin');
+			areaMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+				.setLngLat([area.lng, area.lat])
+				.addTo(map);
+		} else {
+			areaMarker.setLngLat([area.lng, area.lat]);
+		}
+	});
+
+	// Fly to the area only when selected via search (flyNonce bumps).
+	$effect(() => {
+		getFlyNonce();
+		const area = untrack(() => getArea());
+		if (area && map && get(isMapLoaded)) {
+			map.flyTo({ center: [area.lng, area.lat], zoom: 14, duration: 1200 });
+		}
+	});
+
 	$effect(() => {
 		// Read showWaypoints outside the loop so Svelte always tracks it,
 		// even when waypointMarkers is empty on first run.
@@ -173,6 +217,7 @@
 
 	onDestroy(() => {
 		waypointMarkers.forEach((m) => m.remove());
+		areaMarker?.remove();
 		if (map) {
 			map.remove();
 			map = null;
@@ -232,6 +277,17 @@
 		justify-content: center;
 		border: 2px solid white;
 		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
+	}
+
+	:global(.area-pin) {
+		width: 22px;
+		height: 22px;
+		border-radius: 50% 50% 50% 0;
+		background: #7c3aed;
+		border: 2px solid white;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+		transform: rotate(-45deg);
 		cursor: pointer;
 	}
 </style>

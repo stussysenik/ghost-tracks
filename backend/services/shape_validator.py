@@ -229,7 +229,7 @@ class ShapeValidator:
     """Validates that generated routes resemble their target shapes."""
 
     def __init__(self) -> None:
-        self._glm_api_key: Optional[str] = os.environ.get("GLM_API_KEY")
+        self._api_key: Optional[str] = os.environ.get("CEREBRAS_API_KEY")
 
     async def validate(
         self,
@@ -239,8 +239,8 @@ class ShapeValidator:
         threshold: int = VALIDATION_THRESHOLD,
     ) -> ValidationResult:
         """Validate shape similarity. Tries vision model first, falls back to algorithmic."""
-        # Try GLM-4.6v vision validation
-        if self._glm_api_key:
+        # Try Gemma 4 31B vision validation
+        if self._api_key:
             try:
                 return await self._validate_with_vision(
                     target_description, target_points, actual_points, threshold
@@ -258,8 +258,10 @@ class ShapeValidator:
         actual_points: list[Coordinate],
         threshold: int,
     ) -> ValidationResult:
-        """Use GLM-4.6v to visually assess shape similarity."""
-        from zhipuai import ZhipuAI
+        """Use Gemma 4 31B (Cerebras) to visually assess shape similarity."""
+        from openai import AsyncOpenAI
+
+        from services.llm import CEREBRAS_API_BASE, CEREBRAS_MODEL
 
         bbox = _compute_shared_bbox(target_points, actual_points)
 
@@ -269,9 +271,9 @@ class ShapeValidator:
         img.save(buf, format="PNG")
         img_b64 = base64.b64encode(buf.getvalue()).decode()
 
-        client = ZhipuAI(api_key=self._glm_api_key)
-        response = client.chat.completions.create(
-            model="glm-4v",
+        client = AsyncOpenAI(api_key=self._api_key, base_url=CEREBRAS_API_BASE)
+        response = await client.chat.completions.create(
+            model=CEREBRAS_MODEL,
             messages=[
                 {
                     "role": "user",
@@ -317,7 +319,7 @@ class ShapeValidator:
         return ValidationResult(
             score=score,
             passed=score >= threshold,
-            method="glm-4v",
+            method="gemma-4-31b",
             reasoning=reasoning,
         )
 

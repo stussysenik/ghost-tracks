@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { DescribeResponse } from '$types';
+	import { getArea, isAreaBlocked } from '$lib/stores/area.svelte';
 
 	interface Props {
 		onRouteGenerated: (result: DescribeResponse) => void;
@@ -11,30 +12,15 @@
 	let isLoading = $state(false);
 	let error = $state('');
 	let currentStep = $state(0);
-	let showAdvanced = $state(false);
-	let selectedNeighborhood = $state('');
+
+	const area = $derived(getArea());
+	const blocked = $derived(isAreaBlocked());
 
 	const steps = [
-		'Finding the best neighborhood...',
+		'Placing your shape on the map...',
 		'Generating shape control points...',
 		'Routing through real streets...',
 		'Validating shape similarity...'
-	];
-
-	const neighborhoods = [
-		{ value: '', label: 'Let AI decide' },
-		{ value: 'Vinohrady', label: 'Vinohrady' },
-		{ value: 'Karlín', label: 'Karlín' },
-		{ value: 'Letná', label: 'Letná' },
-		{ value: 'Holešovice', label: 'Holešovice' },
-		{ value: 'Žižkov', label: 'Žižkov' },
-		{ value: 'Vršovice', label: 'Vršovice' },
-		{ value: 'Nusle', label: 'Nusle' },
-		{ value: 'Dejvice', label: 'Dejvice' },
-		{ value: 'Smíchov', label: 'Smíchov' },
-		{ value: 'Staré Město', label: 'Staré Město' },
-		{ value: 'Malá Strana', label: 'Malá Strana' },
-		{ value: 'Nové Město', label: 'Nové Město' }
 	];
 
 	let stepTimer: ReturnType<typeof setInterval> | null = null;
@@ -57,7 +43,7 @@
 	}
 
 	async function handleSubmit() {
-		if (!description.trim()) return;
+		if (!description.trim() || blocked) return;
 
 		isLoading = true;
 		error = '';
@@ -65,8 +51,10 @@
 
 		try {
 			const body: Record<string, unknown> = { description: description.trim() };
-			if (selectedNeighborhood) {
-				body.neighborhood = selectedNeighborhood;
+			const current = getArea();
+			if (current) {
+				body.center = { lng: current.lng, lat: current.lat };
+				body.area_name = current.label;
 			}
 
 			const response = await fetch('/api/describe', {
@@ -118,32 +106,10 @@
 		{/if}
 	</div>
 
-	<!-- Advanced options -->
-	<button
-		type="button"
-		class="text-xs text-slate-400 hover:text-slate-600 transition-colors px-1"
-		onclick={() => (showAdvanced = !showAdvanced)}
-	>
-		{showAdvanced ? '▾' : '▸'} Neighborhood preference
-	</button>
-
-	{#if showAdvanced}
-		<select
-			bind:value={selectedNeighborhood}
-			disabled={isLoading}
-			class="glass w-full rounded-xl px-4 py-2.5 text-sm text-slate-700 focus:outline-none
-				focus:ring-2 focus:ring-ghost/30 disabled:opacity-50"
-		>
-			{#each neighborhoods as opt}
-				<option value={opt.value}>{opt.label}</option>
-			{/each}
-		</select>
-	{/if}
-
 	<button
 		type="button"
 		data-testid="describe-button"
-		disabled={!description.trim() || isLoading}
+		disabled={!description.trim() || blocked || isLoading}
 		class="w-full rounded-xl bg-ghost py-3 text-sm font-bold text-white shadow-md
 			hover:bg-ghost-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 		onclick={handleSubmit}
@@ -181,6 +147,10 @@
 	{/if}
 
 	<p class="text-xs text-slate-500 px-1">
-		Try: "a heart shape", "letter P", "a star", "a triangle", "a cat"
+		{#if area}
+			Routing in {area.label}. Try: "a heart shape", "letter P", "a star", "a cat"
+		{:else}
+			Pick an area above, or we'll choose one for you. Try: "a heart shape", "a star", "a cat"
+		{/if}
 	</p>
 </div>

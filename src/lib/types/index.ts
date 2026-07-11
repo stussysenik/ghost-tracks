@@ -295,6 +295,24 @@ export interface NeighborhoodOption {
 	icon: string;
 }
 
+/** A globally-selected generation area: a dropped pin + human label */
+export interface SelectedArea {
+	lng: number;
+	lat: number;
+	label: string;
+}
+
+/** Street-density gate status for the selected area */
+export type DensityStatus = 'idle' | 'checking' | 'ok' | 'sparse' | 'error';
+
+/** Response from POST /api/area/check */
+export interface AreaCheckResponse {
+	ok: boolean;
+	bbox: { min_lng: number; min_lat: number; max_lng: number; max_lat: number };
+	way_count: number | null;
+	message: string;
+}
+
 // ============================================================================
 // UTILITY TYPES
 // ============================================================================

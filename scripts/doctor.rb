@@ -4,30 +4,27 @@ require 'set'
 # Ghost Tracks System Doctor & Env Discovery
 # This script scans the codebase to find every env key you actually need.
 
+# Tooling/CI vars that live in the shell or CI runner, never in the app's .env.
+IGNORE = %w[CI NODE_ENV].to_set
+
 def discover_keys
   puts "🔍 Scanning codebase for environment variables..."
   keys = Set.new
-  
-  # Search patterns for different runtimes
-  patterns = {
-    "Svelte/Vite" => /VITE_[A-Z0-9_]+/,
-    "Python"      => /os\.getenv\(['"]([A-Z0-9_]+)['"]\)/,
-    "Bun/Hono"    => /process\.env\.([A-Z0-9_]+)/
-  }
 
   Dir.glob("**/*.{ts,js,svelte,py}").each do |file|
     next if file.include?('node_modules') || file.include?('venv')
+    next if file.end_with?('.config.ts', '.config.js') # test/build runner config
     content = File.read(file)
-    
-    # Simple regex discovery
+
+    # SvelteKit / Vite
     keys.merge(content.scan(/VITE_[A-Z0-9_]+/).flatten)
-    keys.merge(content.scan(/os\.getenv\(['"]([A-Z0-9_]+)['"]\)/).flatten)
-    keys.merge(content.scan(/process\.env\.([A-Z0-9_]+)/).flatten)
-    # Also check env.BACKEND_URL style in SvelteKit
-    keys.merge(content.scan(/env\.([A-Z0-9_]+)/).flatten)
+    keys.merge(content.scan(/(?:process\.)?env\.([A-Z0-9_]+)/).flatten)
+    # Python: os.getenv('X'), os.environ.get('X'), os.environ['X']
+    keys.merge(content.scan(/os\.(?:getenv|environ\.get)\(\s*['"]([A-Z0-9_]+)['"]/).flatten)
+    keys.merge(content.scan(/os\.environ\[\s*['"]([A-Z0-9_]+)['"]\s*\]/).flatten)
   end
-  
-  keys.to_a.sort
+
+  (keys - IGNORE).to_a.sort
 end
 
 def check_system(discovered_keys)

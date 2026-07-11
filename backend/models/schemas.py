@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Coordinate(BaseModel):
@@ -39,6 +39,17 @@ class Neighborhood(BaseModel):
     good_for: list[str]
 
 
+class Area(BaseModel):
+    """A generic, global generation area — a pin + a computed bounding box.
+    Duck-compatible with Neighborhood (name/center/bbox/street_layout) so the
+    generator treats curated neighborhoods and dropped pins identically."""
+
+    name: str
+    center: Coordinate
+    bbox: BoundingBox
+    street_layout: str = "mixed"
+
+
 class ShapeIdea(BaseModel):
     name: str
     description: str
@@ -67,8 +78,19 @@ class ValidationResult(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    neighborhood: str
+    # Global area selection: either a dropped pin (`center` + target length) or
+    # a curated neighborhood name. At least one is required.
+    center: Coordinate | None = None
+    target_distance_km: float = Field(default=5.0, ge=1.0, le=30.0)
+    area_name: str | None = None
+    neighborhood: str | None = None
     count: int = Field(default=3, ge=1, le=6)
+
+    @model_validator(mode="after")
+    def _require_area(self) -> "GenerateRequest":
+        if self.center is None and not self.neighborhood:
+            raise ValueError("Provide either `center` (a dropped pin) or `neighborhood`.")
+        return self
 
 
 class GenerateResponse(BaseModel):
@@ -81,6 +103,21 @@ class DescribeRequest(BaseModel):
     description: str
     max_distance_km: float = Field(default=10.0, ge=1.0, le=30.0)
     neighborhood: str | None = Field(default=None)
+    # Optional dropped pin; when absent the backend auto-selects an area.
+    center: Coordinate | None = None
+    area_name: str | None = None
+
+
+class AreaCheckRequest(BaseModel):
+    center: Coordinate
+    target_distance_km: float = Field(default=5.0, ge=1.0, le=30.0)
+
+
+class AreaCheckResponse(BaseModel):
+    ok: bool
+    bbox: BoundingBox
+    way_count: int | None = None
+    message: str
 
 
 class DescribeResponse(BaseModel):

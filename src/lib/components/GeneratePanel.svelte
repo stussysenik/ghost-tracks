@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ShapeIdea } from '$types';
-	import NeighborhoodPicker from './NeighborhoodPicker.svelte';
 	import ShapeIdeaCard from './ShapeIdeaCard.svelte';
+	import { getArea, isAreaBlocked } from '$lib/stores/area.svelte';
 
 	interface Props {
 		onIdeaSelected: (idea: ShapeIdea) => void;
@@ -9,13 +9,16 @@
 
 	let { onIdeaSelected }: Props = $props();
 
-	let selectedNeighborhood = $state('');
 	let ideas = $state<ShapeIdea[]>([]);
 	let isLoading = $state(false);
 	let error = $state('');
 
+	const area = $derived(getArea());
+	const blocked = $derived(isAreaBlocked());
+
 	async function generate() {
-		if (!selectedNeighborhood) return;
+		const current = getArea();
+		if (!current || isAreaBlocked()) return;
 
 		isLoading = true;
 		error = '';
@@ -26,7 +29,9 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					neighborhood: selectedNeighborhood,
+					center: { lng: current.lng, lat: current.lat },
+					area_name: current.label,
+					target_distance_km: 5,
 					count: 3
 				})
 			});
@@ -47,12 +52,10 @@
 </script>
 
 <div class="space-y-3">
-	<NeighborhoodPicker selected={selectedNeighborhood} onSelect={(v) => (selectedNeighborhood = v)} />
-
 	<button
 		type="button"
 		data-testid="generate-button"
-		disabled={!selectedNeighborhood || isLoading}
+		disabled={blocked || isLoading}
 		class="w-full rounded-xl bg-ghost py-3 text-sm font-bold text-white shadow-md
 			hover:bg-ghost-dark transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 		onclick={generate}
@@ -61,6 +64,8 @@
 			<span class="inline-flex items-center gap-2">
 				<span class="animate-spin">✨</span> Generating ideas...
 			</span>
+		{:else if !area}
+			Pick an area to start
 		{:else}
 			Generate Route Ideas
 		{/if}

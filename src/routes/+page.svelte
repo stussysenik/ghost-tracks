@@ -2,13 +2,14 @@
 	/**
 	 * Ghost Tracks v2 - Main Page
 	 *
-	 * Two modes:
-	 * - Generate: Pick a Prague neighborhood → get ASCII art route ideas
-	 * - Describe: Type a description → get a validated, routed shape
+	 * Pick any area worldwide (search or map pin), then:
+	 * - Generate: get shape route ideas for that area
+	 * - Describe: type a description → a validated, routed shape in that area
 	 */
 	import { onMount } from 'svelte';
 	import Map from '$components/Map.svelte';
 	import ModeSwitcher from '$components/ModeSwitcher.svelte';
+	import AreaPicker from '$components/AreaPicker.svelte';
 	import GeneratePanel from '$components/GeneratePanel.svelte';
 	import DescribePanel from '$components/DescribePanel.svelte';
 	import RouteInstructions from '$components/RouteInstructions.svelte';
@@ -16,7 +17,7 @@
 	import { addToast } from '$lib/stores/toasts.svelte';
 	import { useMachine } from '@xstate/svelte';
 	import { generationMachine } from '$lib/machines/generation';
-	import ConstraintLayout from '$components/ConstraintLayout.svelte';
+	import { getArea } from '$lib/stores/area.svelte';
 
 	const { snapshot, send } = useMachine(generationMachine);
 
@@ -104,10 +105,17 @@
 	async function handleIdeaSelected(idea: ShapeIdea) {
 		isRoutingIdea = true;
 		try {
+			const area = getArea();
+			const body: Record<string, unknown> = { description: idea.name };
+			if (area) {
+				body.center = { lng: area.lng, lat: area.lat };
+				body.area_name = area.label;
+			}
+
 			const response = await fetch('/api/describe', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ description: idea.name })
+				body: JSON.stringify(body)
 			});
 
 			if (!response.ok) throw new Error('Routing failed');
@@ -242,15 +250,12 @@
 	<!-- Top controls -->
 	<div class="absolute top-0 left-0 right-0 safe-top z-20 pointer-events-none">
 		<div class="p-4 space-y-3 pointer-events-auto max-w-lg">
-			<!-- Constraint-based layout example -->
-			<div class="glass rounded-xl overflow-hidden mb-2">
-				<ConstraintLayout />
-			</div>
-
 			<div class="flex items-center gap-3">
 				<div class="text-xl font-bold text-slate-800 glass rounded-full px-3 py-1.5">👻</div>
 				<ModeSwitcher {mode} onModeChange={handleModeChange} />
 			</div>
+
+			<AreaPicker />
 
 			{#if mode === 'generate'}
 				<GeneratePanel onIdeaSelected={handleIdeaSelected} />

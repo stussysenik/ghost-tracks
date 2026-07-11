@@ -1,5 +1,5 @@
 /**
- * POST /api/describe - Proxy to Python backend for description-to-route.
+ * POST /api/area/check - Proxy to Python backend for street-density gating.
  */
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
@@ -11,9 +11,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = await request.json();
 
 		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 90_000);
+		const timeout = setTimeout(() => controller.abort(), 20_000);
 
-		const response = await fetch(`${BACKEND_URL}/describe/`, {
+		const response = await fetch(`${BACKEND_URL}/area/check`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(body),
@@ -25,17 +25,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		const data = await response.json();
 		return json(data, { status: response.status });
 	} catch (error) {
-		console.error('Backend proxy error (describe):', error);
+		console.error('Backend proxy error (area/check):', error);
 
 		if (error instanceof DOMException && error.name === 'AbortError') {
 			return json(
-				{ error: 'Route generation timed out', detail: 'The backend took too long to respond. Try a simpler shape.' },
+				{ error: 'Area check timed out', detail: 'The density service took too long.' },
 				{ status: 504 }
 			);
 		}
 
 		const isConnectionError =
-			error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('connect'));
+			error instanceof TypeError &&
+			(error.message.includes('fetch') || error.message.includes('connect'));
 
 		return json(
 			{

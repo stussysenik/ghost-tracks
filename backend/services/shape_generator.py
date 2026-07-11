@@ -49,28 +49,32 @@ class ShapeGenerator:
         neighborhood: str,
         count: int = 3,
     ) -> GenerateResponse:
-        """Mode A: Generate shape ideas for a neighborhood."""
+        """Mode A (curated): generate ideas for a named neighborhood."""
         hood = self.neighborhood_service.get_by_name(neighborhood)
         if not hood:
             raise ValueError(f"Unknown neighborhood: {neighborhood}")
+        return await self.generate_for_area(hood, count)
 
+    async def generate_for_area(self, area, count: int = 3) -> GenerateResponse:
+        """Mode A (global): generate ideas for any area (dropped pin or
+        neighborhood). `area` needs .name, .bbox, and .street_layout."""
         ideas: list[ShapeIdea] = []
 
         # Try LLM first
         if self._generate_ideas:
             try:
-                ideas = await self._generate_with_llm(hood, count)
+                ideas = await self._generate_with_llm(area, count)
             except Exception as e:
                 print(f"LLM generation failed, falling back to templates: {e}")
 
         # Fallback to parametric templates
         if not ideas:
-            ideas = self._generate_with_templates(hood, count)
+            ideas = self._generate_with_templates(area, count)
 
         return GenerateResponse(
             ideas=ideas,
-            neighborhood=hood.name,
-            bbox=hood.bbox,
+            neighborhood=area.name,
+            bbox=area.bbox,
         )
 
     async def generate_from_description(
@@ -78,21 +82,31 @@ class ShapeGenerator:
         description: str,
         max_distance_km: float = 10.0,
         neighborhood: str | None = None,
+        area=None,
     ) -> DescribeResponse:
-        """Mode B: Generate a route from a text description."""
-        # Step 1: Find optimal neighborhood (or use the one specified)
-        if neighborhood:
-            hood = self.neighborhood_service.get_by_name(neighborhood)
-            if not hood:
-                raise ValueError(f"Unknown neighborhood: {neighborhood}")
-        else:
-            hood = await self._find_neighborhood(description)
+        """Mode B: Generate a route from a text description.
 
-        # Get alternative neighborhoods (top 3, excluding current)
-        all_ranked = self.neighborhood_service.find_best_for_shape(description, max_distance_km)
-        alternative_neighborhoods = [
-            h.name for h in all_ranked if h.name != hood.name
-        ][:3]
+        `area` (a dropped pin) takes precedence; otherwise a curated
+        neighborhood is used or auto-selected."""
+        # Step 1: Resolve the target area
+        if area is not None:
+            hood = area
+            alternative_neighborhoods: list[str] = []
+        else:
+            if neighborhood:
+                hood = self.neighborhood_service.get_by_name(neighborhood)
+                if not hood:
+                    raise ValueError(f"Unknown neighborhood: {neighborhood}")
+            else:
+                hood = await self._find_neighborhood(description)
+
+            # Alternative curated neighborhoods (top 3, excluding current)
+            all_ranked = self.neighborhood_service.find_best_for_shape(
+                description, max_distance_km
+            )
+            alternative_neighborhoods = [
+                h.name for h in all_ranked if h.name != hood.name
+            ][:3]
 
         # Step 2: Generate control points
         control_points = await self._generate_control_points(description, hood.bbox)

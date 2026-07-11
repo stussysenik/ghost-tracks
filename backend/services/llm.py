@@ -1,4 +1,4 @@
-"""DSPy module definitions for shape generation with GLM-4.7."""
+"""DSPy module definitions for shape generation with Cerebras Gemma 4 31B."""
 
 from __future__ import annotations
 
@@ -10,29 +10,26 @@ import dspy
 
 from models.schemas import Coordinate
 
+# Cerebras serves Gemma 4 31B (multimodal) on an OpenAI-compatible endpoint.
+# One model backs text→shape, area reasoning, and the vision judge.
+CEREBRAS_MODEL = "gemma-4-31b"
+CEREBRAS_API_BASE = "https://api.cerebras.ai/v1"
+
 
 def configure_llm() -> Optional[dspy.LM]:
-    """Configure DSPy with an available LLM."""
-    # Priority: NVIDIA -> OpenAI/GLM
-    if "NVIDIA_NIM_API_KEY" in os.environ:
-        api_key = os.environ["NVIDIA_NIM_API_KEY"]
-        lm = dspy.NVIDIA(model="nvidia/llama3-70b-instruct", api_key=api_key)
-        dspy.configure(lm=lm)
-        print("✅ DSPy configured with NVIDIA NIM")
-        return lm
-    
-    api_key = os.environ.get("GLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    """Configure DSPy with Cerebras Gemma 4 31B."""
+    api_key = os.environ.get("CEREBRAS_API_KEY")
     if not api_key:
-        print("⚠️ No LLM API key found, DSPy is disabled.")
+        print("⚠️ CEREBRAS_API_KEY not set, DSPy is disabled.")
         return None
 
     lm = dspy.LM(
-        model="openai/glm-4-plus",
+        model=f"openai/{CEREBRAS_MODEL}",
         api_key=api_key,
-        api_base="https://open.bigmodel.cn/api/paas/v4/",
+        api_base=CEREBRAS_API_BASE,
     )
     dspy.configure(lm=lm)
-    print("✅ DSPy configured with GLM")
+    print("✅ DSPy configured with Cerebras Gemma 4 31B")
     return lm
 
 

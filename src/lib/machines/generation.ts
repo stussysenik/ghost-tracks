@@ -48,7 +48,7 @@ export const generationMachine = createMachine({
         onError: {
           target: 'failure',
           actions: assign({
-            error: ({ event }) => event.error.message
+            error: ({ event }) => (event.error instanceof Error ? event.error.message : String(event.error))
           })
         }
       }
