@@ -7,6 +7,10 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "eval: offline generation-quality scoreboard (deselected by default; run with -m eval)",
+]
+addopts = "-m 'not eval'"
 
 [tool.ruff]
 line-length = 100

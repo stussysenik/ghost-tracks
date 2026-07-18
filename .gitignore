@@ -32,3 +32,4 @@ __pycache__/
 backend/.venv/
 *.egg-info/
 backend/venv/
+backend/.graph_cache/
