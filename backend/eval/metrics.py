@@ -110,18 +110,25 @@ def repeat_ratio(route: list[Coordinate], cell_m: float = 25.0) -> float:
         y_m = c.lat * m_per_deg_lat
         return (int(x_m // cell_m), int(y_m // cell_m))
 
+    # Sample by cumulative arc length, not per segment: the sample count must depend
+    # on how far the route goes, never on how densely its polyline is vertexed.
     visited: list[tuple[int, int]] = []
-    for i in range(len(route) - 1):
-        a, b = route[i], route[i + 1]
+    next_at = 0.0
+    walked = 0.0
+    for a, b in zip(route, route[1:]):
         seg = haversine_distance_m(a, b)
-        steps = max(1, int(seg // cell_m))
-        for s in range(steps):
-            frac = s / steps
-            p = Coordinate(
-                lng=a.lng + (b.lng - a.lng) * frac,
-                lat=a.lat + (b.lat - a.lat) * frac,
+        while next_at <= walked + seg:
+            frac = (next_at - walked) / seg if seg > 0 else 0.0
+            visited.append(
+                cell_of(
+                    Coordinate(
+                        lng=a.lng + (b.lng - a.lng) * frac,
+                        lat=a.lat + (b.lat - a.lat) * frac,
+                    )
+                )
             )
-            visited.append(cell_of(p))
+            next_at += cell_m
+        walked += seg
     visited.append(cell_of(route[-1]))
 
     if not visited:

@@ -101,6 +101,28 @@ def test_repeat_ratio_out_and_back_high():
     assert repeat_ratio(out_and_back) > 0.4
 
 
+def _densify(route: list[Coordinate], factor: int) -> list[Coordinate]:
+    """Insert `factor - 1` collinear vertices per segment — same ground, more points."""
+    out: list[Coordinate] = []
+    for a, b in zip(route, route[1:]):
+        for s in range(factor):
+            f = s / factor
+            out.append(
+                Coordinate(lng=a.lng + (b.lng - a.lng) * f, lat=a.lat + (b.lat - a.lat) * f)
+            )
+    out.append(route[-1])
+    return out
+
+
+def test_repeat_ratio_invariant_to_vertex_density():
+    # Densifying a polyline changes no ground covered, so the ratio must not move.
+    # Guards the sampler against binning per-segment instead of per-arc-length.
+    sq = _square(LNG0, LAT0, 0.01)
+    coarse = repeat_ratio(sq)
+    for factor in (4, 16, 64, 256):
+        assert abs(repeat_ratio(_densify(sq, factor)) - coarse) < 0.05
+
+
 # --- aggregate ----------------------------------------------------------------
 
 

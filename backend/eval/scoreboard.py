@@ -9,6 +9,7 @@ later router change must move these numbers, not just pass unit tests.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from eval.fixtures import Fixture, get_fixtures
@@ -44,6 +45,16 @@ def score_one(fixture: Fixture, cassette: dict) -> StageScores:
     target = fixture.target_polyline()
     routed = _routed_coords(cassette)
     return score_fixture(target, routed, fixture.target_distance_km)
+
+
+# A router under test: fixture -> routed polyline, or None when it has no route.
+RouteProvider = Callable[[Fixture], list[Coordinate] | None]
+
+
+def cassette_provider(fixture: Fixture) -> list[Coordinate] | None:
+    """The recorded Mapbox baseline — replayed, never called live."""
+    cassette = load_recorded(fixture.id)
+    return None if cassette is None else _routed_coords(cassette)
 
 
 def _mean(xs: list[float]) -> float:
@@ -82,16 +93,23 @@ def _dominant_failure_mode(agg: dict) -> str:
     return f"{worst} (health {health[worst]:.2f} of {json.dumps({k: round(v, 2) for k, v in health.items()})})"
 
 
-def build_scoreboard() -> dict:
-    """Score every recorded fixture and aggregate. Missing cassettes are listed."""
+def build_scoreboard(
+    provider: RouteProvider = cassette_provider,
+    label: str = "mapbox-directions-walking",
+) -> dict:
+    """Score every fixture routed by `provider` and aggregate.
+
+    Defaults to replaying the recorded Mapbox baseline. Pass a graph-router
+    provider to score a challenger on exactly the same fixtures and metrics.
+    """
     rows: list[dict] = []
     missing: list[str] = []
     for fx in get_fixtures():
-        cassette = load_recorded(fx.id)
-        if cassette is None:
+        routed = provider(fx)
+        if routed is None:
             missing.append(fx.id)
             continue
-        scores = score_one(fx, cassette)
+        scores = score_fixture(fx.target_polyline(), routed, fx.target_distance_km)
         rows.append(
             {
                 "id": fx.id,
@@ -116,7 +134,7 @@ def build_scoreboard() -> dict:
     overall = _aggregate(rows) if rows else {}
 
     return {
-        "baseline": "mapbox-directions-walking",
+        "baseline": label,
         "fixtures_scored": len(rows),
         "fixtures_missing": missing,
         "overall": overall,
