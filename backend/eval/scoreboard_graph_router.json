@@ -1,0 +1,339 @@
+{
+  "baseline": "owned-graph-router",
+  "fixtures_scored": 12,
+  "fixtures_missing": [],
+  "overall": {
+    "count": 12,
+    "extraction_iou": 100.0,
+    "snap_score": 85.95,
+    "loop_closure_rate": 0.5,
+    "within_distance_rate": 0.333,
+    "mean_distance_error": 0.799,
+    "mean_repeat_ratio": 0.28
+  },
+  "by_difficulty": {
+    "easy": {
+      "count": 3,
+      "extraction_iou": 100.0,
+      "snap_score": 83.433,
+      "loop_closure_rate": 0.667,
+      "within_distance_rate": 0.0,
+      "mean_distance_error": 1.471,
+      "mean_repeat_ratio": 0.222
+    },
+    "moderate": {
+      "count": 4,
+      "extraction_iou": 100.0,
+      "snap_score": 90.35,
+      "loop_closure_rate": 1.0,
+      "within_distance_rate": 0.25,
+      "mean_distance_error": 0.5,
+      "mean_repeat_ratio": 0.25
+    },
+    "hard": {
+      "count": 5,
+      "extraction_iou": 100.0,
+      "snap_score": 83.94,
+      "loop_closure_rate": 0.0,
+      "within_distance_rate": 0.6,
+      "mean_distance_error": 0.636,
+      "mean_repeat_ratio": 0.338
+    }
+  },
+  "by_network": {
+    "dense_grid": {
+      "count": 4,
+      "extraction_iou": 100.0,
+      "snap_score": 94.725,
+      "loop_closure_rate": 0.75,
+      "within_distance_rate": 0.5,
+      "mean_distance_error": 0.277,
+      "mean_repeat_ratio": 0.182
+    },
+    "irregular": {
+      "count": 4,
+      "extraction_iou": 100.0,
+      "snap_score": 93.3,
+      "loop_closure_rate": 0.25,
+      "within_distance_rate": 0.5,
+      "mean_distance_error": 0.525,
+      "mean_repeat_ratio": 0.195
+    },
+    "sparse": {
+      "count": 4,
+      "extraction_iou": 100.0,
+      "snap_score": 69.825,
+      "loop_closure_rate": 0.5,
+      "within_distance_rate": 0.0,
+      "mean_distance_error": 1.596,
+      "mean_repeat_ratio": 0.462
+    }
+  },
+  "dominant_failure_mode": "runnability (health 0.33 of {\"extraction\": 1.0, \"snapping\": 0.86, \"runnability\": 0.33})",
+  "rows": [
+    {
+      "id": "circle-eixample",
+      "shape": "circle",
+      "area": "eixample",
+      "network_tier": "dense_grid",
+      "difficulty": "easy",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 92.8,
+        "modified_hausdorff_m": 44.5,
+        "frechet_m": 92.8,
+        "diameter_m": 1423.3,
+        "snap_score": 94.8,
+        "routed_km": 5.331,
+        "target_km": 3.0,
+        "loop_closure_gap_m": 26.0,
+        "is_loop": true,
+        "distance_error": 0.7768,
+        "repeat_ratio": 0.1488,
+        "extras": {}
+      }
+    },
+    {
+      "id": "square-prague",
+      "shape": "square",
+      "area": "prague",
+      "network_tier": "irregular",
+      "difficulty": "easy",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 142.9,
+        "modified_hausdorff_m": 79.2,
+        "frechet_m": 163.1,
+        "diameter_m": 1691.1,
+        "snap_score": 92.6,
+        "routed_km": 7.851,
+        "target_km": 3.0,
+        "loop_closure_gap_m": 61.6,
+        "is_loop": false,
+        "distance_error": 1.6169,
+        "repeat_ratio": 0.1804,
+        "extras": {}
+      }
+    },
+    {
+      "id": "triangle-scottsdale",
+      "shape": "triangle",
+      "area": "scottsdale",
+      "network_tier": "sparse",
+      "difficulty": "easy",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 825.1,
+        "modified_hausdorff_m": 185.2,
+        "frechet_m": 874.8,
+        "diameter_m": 1579.2,
+        "snap_score": 62.9,
+        "routed_km": 9.058,
+        "target_km": 3.0,
+        "loop_closure_gap_m": 0.0,
+        "is_loop": true,
+        "distance_error": 2.0193,
+        "repeat_ratio": 0.3379,
+        "extras": {}
+      }
+    },
+    {
+      "id": "heart-prague",
+      "shape": "heart",
+      "area": "prague",
+      "network_tier": "irregular",
+      "difficulty": "moderate",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 94.0,
+        "modified_hausdorff_m": 63.4,
+        "frechet_m": 94.0,
+        "diameter_m": 1446.2,
+        "snap_score": 94.3,
+        "routed_km": 6.571,
+        "target_km": 5.0,
+        "loop_closure_gap_m": 0.0,
+        "is_loop": true,
+        "distance_error": 0.3141,
+        "repeat_ratio": 0.1894,
+        "extras": {}
+      }
+    },
+    {
+      "id": "star-eixample",
+      "shape": "star",
+      "area": "eixample",
+      "network_tier": "dense_grid",
+      "difficulty": "moderate",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 78.5,
+        "modified_hausdorff_m": 48.6,
+        "frechet_m": 108.4,
+        "diameter_m": 1465.0,
+        "snap_score": 94.7,
+        "routed_km": 6.395,
+        "target_km": 5.0,
+        "loop_closure_gap_m": 6.2,
+        "is_loop": true,
+        "distance_error": 0.279,
+        "repeat_ratio": 0.1401,
+        "extras": {}
+      }
+    },
+    {
+      "id": "arrow-scottsdale",
+      "shape": "arrow",
+      "area": "scottsdale",
+      "network_tier": "sparse",
+      "difficulty": "moderate",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 500.3,
+        "modified_hausdorff_m": 209.8,
+        "frechet_m": 548.6,
+        "diameter_m": 1926.0,
+        "snap_score": 79.2,
+        "routed_km": 11.868,
+        "target_km": 5.0,
+        "loop_closure_gap_m": 0.0,
+        "is_loop": true,
+        "distance_error": 1.3737,
+        "repeat_ratio": 0.5399,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-o-eixample",
+      "shape": "letter O",
+      "area": "eixample",
+      "network_tier": "dense_grid",
+      "difficulty": "moderate",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 92.8,
+        "modified_hausdorff_m": 55.0,
+        "frechet_m": 145.4,
+        "diameter_m": 1423.3,
+        "snap_score": 93.2,
+        "routed_km": 5.16,
+        "target_km": 5.0,
+        "loop_closure_gap_m": 28.0,
+        "is_loop": true,
+        "distance_error": 0.0319,
+        "repeat_ratio": 0.1298,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-m-prague",
+      "shape": "letter M",
+      "area": "prague",
+      "network_tier": "irregular",
+      "difficulty": "hard",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 130.0,
+        "modified_hausdorff_m": 60.3,
+        "frechet_m": 130.0,
+        "diameter_m": 1599.9,
+        "snap_score": 93.6,
+        "routed_km": 6.472,
+        "target_km": 6.0,
+        "loop_closure_gap_m": 708.3,
+        "is_loop": false,
+        "distance_error": 0.0786,
+        "repeat_ratio": 0.1654,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-w-scottsdale",
+      "shape": "letter W",
+      "area": "scottsdale",
+      "network_tier": "sparse",
+      "difficulty": "hard",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 440.2,
+        "modified_hausdorff_m": 280.7,
+        "frechet_m": 641.9,
+        "diameter_m": 1591.1,
+        "snap_score": 71.9,
+        "routed_km": 16.789,
+        "target_km": 6.0,
+        "loop_closure_gap_m": 981.5,
+        "is_loop": false,
+        "distance_error": 1.7981,
+        "repeat_ratio": 0.5453,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-x-eixample",
+      "shape": "letter X",
+      "area": "eixample",
+      "network_tier": "dense_grid",
+      "difficulty": "hard",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 67.6,
+        "modified_hausdorff_m": 52.9,
+        "frechet_m": 70.1,
+        "diameter_m": 1659.9,
+        "snap_score": 96.2,
+        "routed_km": 6.112,
+        "target_km": 6.0,
+        "loop_closure_gap_m": 797.2,
+        "is_loop": false,
+        "distance_error": 0.0186,
+        "repeat_ratio": 0.3089,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-z-prague",
+      "shape": "letter Z",
+      "area": "prague",
+      "network_tier": "irregular",
+      "difficulty": "hard",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 142.7,
+        "modified_hausdorff_m": 76.3,
+        "frechet_m": 142.7,
+        "diameter_m": 1599.9,
+        "snap_score": 92.7,
+        "routed_km": 5.469,
+        "target_km": 6.0,
+        "loop_closure_gap_m": 1470.7,
+        "is_loop": false,
+        "distance_error": 0.0885,
+        "repeat_ratio": 0.2455,
+        "extras": {}
+      }
+    },
+    {
+      "id": "letter-h-scottsdale",
+      "shape": "letter H",
+      "area": "scottsdale",
+      "network_tier": "sparse",
+      "difficulty": "hard",
+      "scores": {
+        "extraction_iou": 100.0,
+        "hausdorff_m": 660.0,
+        "modified_hausdorff_m": 282.8,
+        "frechet_m": 900.8,
+        "diameter_m": 1710.2,
+        "snap_score": 65.3,
+        "routed_km": 13.162,
+        "target_km": 6.0,
+        "loop_closure_gap_m": 1282.8,
+        "is_loop": false,
+        "distance_error": 1.1937,
+        "repeat_ratio": 0.4242,
+        "extras": {}
+      }
+    }
+  ]
+}

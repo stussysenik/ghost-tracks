@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+from pathlib import Path
 from typing import Optional
 
 import dspy
-import httpx
 
 from models.schemas import (
     BoundingBox,
@@ -26,16 +27,26 @@ from services.llm import (
     parse_shape_json,
 )
 from services.neighborhood import NeighborhoodService
+from services.road_graph import DEFAULT_CACHE_DIR, RoadGraph
+from services.shape_router import ShapeRouter
 from services.shape_templates import get_parametric_shape
 from services.shape_validator import ShapeValidator
 from services.street_mapper import StreetMapper, haversine_distance_m
 
 MAX_RETRIES = int(os.environ.get("MAX_GENERATION_RETRIES", "2"))
-SVELTEKIT_URL = os.environ.get("SVELTEKIT_URL", "http://127.0.0.1:4173")
 
 
 class ShapeGenerator:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        graph_cache_dir: Path | str = DEFAULT_CACHE_DIR,
+        allow_graph_download: bool = True,
+    ) -> None:
+        # Injected so the eval fixtures and tests can route against the committed
+        # extracts with downloads off; production keeps the on-disk cache.
+        self.graph_cache_dir = graph_cache_dir
+        self.allow_graph_download = allow_graph_download
         self.neighborhood_service = NeighborhoodService()
         self.street_mapper = StreetMapper()
         self.validator = ShapeValidator()
@@ -114,8 +125,8 @@ class ShapeGenerator:
         # Step 3: Map to streets
         mapped = self.street_mapper.map_to_streets(control_points, hood.bbox)
 
-        # Step 4: Route via Mapbox (through SvelteKit proxy)
-        routed = await self._route_waypoints(mapped)
+        # Step 4: Route on the owned OSM walk graph
+        routed = await self._route_waypoints(mapped, hood.bbox)
 
         # Step 5: Extract waypoints with turn instructions
         waypoints = self._extract_waypoints(routed["coordinates"])
@@ -137,7 +148,7 @@ class ShapeGenerator:
                 control_points, routed_coords
             )
             mapped = self.street_mapper.map_to_streets(control_points, hood.bbox)
-            routed = await self._route_waypoints(mapped)
+            routed = await self._route_waypoints(mapped, hood.bbox)
             routed_coords = [Coordinate(lng=c[0], lat=c[1]) for c in routed["coordinates"]]
             validation = await self.validator.validate(
                 target_description=description,
@@ -265,82 +276,32 @@ class ShapeGenerator:
         scale = min(bbox.width_deg(), bbox.height_deg()) * 0.7
         return get_parametric_shape(description, center, scale)
 
-    async def _route_waypoints(self, waypoints: list[Coordinate]) -> dict:
-        """Route waypoints through Mapbox Directions API via SvelteKit proxy."""
-        coords = [[w.lng, w.lat] for w in waypoints]
-
-        # Try SvelteKit /api/route endpoint first
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{SVELTEKIT_URL}/api/route",
-                    json={"waypoints": coords, "profile": "walking"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("success"):
-                        return {
-                            "coordinates": data["coordinates"],
-                            "distance_km": data["distance_km"],
-                            "duration_minutes": data["duration_minutes"],
-                        }
-        except Exception as e:
-            print(f"SvelteKit routing failed: {e}")
-
-        # Fallback: call Mapbox directly
-        mapbox_token = os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get(
-            "VITE_MAPBOX_ACCESS_TOKEN"
+    def _route_on_graph(self, waypoints: list[Coordinate], bbox: BoundingBox) -> dict:
+        """Route an outline on the owned OSM walk graph. Blocking — see caller."""
+        graph = RoadGraph.for_bbox(
+            bbox,
+            cache_dir=self.graph_cache_dir,
+            allow_download=self.allow_graph_download,
         )
-        if not mapbox_token:
-            # Return unrouted coordinates as fallback
-            return {
-                "coordinates": coords,
-                "distance_km": self.street_mapper.estimate_distance_km(waypoints),
-                "duration_minutes": int(
-                    self.street_mapper.estimate_distance_km(waypoints) / 5 * 60
-                ),
-            }
-
-        # Chunk if > 25 waypoints
-        all_coords: list[list[float]] = []
-        total_dist = 0.0
-        total_dur = 0.0
-        chunk_size = 25
-
-        for i in range(0, len(coords), chunk_size - 1):
-            chunk = coords[i : i + chunk_size]
-            if len(chunk) < 2:
-                continue
-            coords_str = ";".join(f"{c[0]},{c[1]}" for c in chunk)
-            url = (
-                f"https://api.mapbox.com/directions/v5/mapbox/walking/{coords_str}"
-                f"?geometries=geojson&overview=full&steps=true&access_token={mapbox_token}"
-            )
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(url)
-                data = resp.json()
-
-            if data.get("code") != "Ok" or not data.get("routes"):
-                continue
-
-            route = data["routes"][0]
-            route_coords = route["geometry"]["coordinates"]
-
-            if all_coords:
-                all_coords.extend(route_coords[1:])  # skip overlap point
-            else:
-                all_coords.extend(route_coords)
-
-            total_dist += route["distance"] / 1000
-            total_dur += route["duration"] / 60
-
+        routed = ShapeRouter(graph).route(waypoints)
         return {
-            "coordinates": all_coords or coords,
-            "distance_km": round(total_dist, 1) or self.street_mapper.estimate_distance_km(waypoints),
-            "duration_minutes": round(total_dur) or int(
-                self.street_mapper.estimate_distance_km(waypoints) / 5 * 60
-            ),
+            "coordinates": [[c.lng, c.lat] for c in routed.coordinates],
+            "distance_km": round(routed.distance_km, 1),
+            "duration_minutes": routed.duration_minutes,
         }
+
+    async def _route_waypoints(
+        self, waypoints: list[Coordinate], bbox: BoundingBox
+    ) -> dict:
+        """Route waypoints on the owned road graph.
+
+        Graph load and the Viterbi/A* search are CPU-bound and synchronous, so
+        they run off the event loop. `UnroutableShapeError` is left to propagate:
+        it means this area's street network cannot express the shape, which is
+        actionable by the user and must not be silently degraded into a route
+        that does not look like what they asked for.
+        """
+        return await asyncio.to_thread(self._route_on_graph, waypoints, bbox)
 
     def _extract_waypoints(self, coordinates: list[list[float]]) -> list[WaypointMarker]:
         """Extract turn points from routed coordinates."""

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from models.schemas import DescribeRequest, DescribeResponse
 from services.area import area_from_center
 from services.shape_generator import ShapeGenerator
+from services.shape_router import UnroutableShapeError
 
 router = APIRouter()
 generator = ShapeGenerator()
@@ -24,7 +25,7 @@ async def describe_shape(req: DescribeRequest) -> DescribeResponse:
             neighborhood=req.neighborhood,
             area=area,
         )
-    except ValueError as exc:
+    except (ValueError, UnroutableShapeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

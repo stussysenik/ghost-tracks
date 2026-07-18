@@ -88,9 +88,14 @@ class HopDiagnostic:
     crow_m: float
     walked_m: float
     detour_ratio: float
-    reason: str  # "detour" | "disconnected"
+    reason: str  # "detour" | "disconnected" | "unanchored"
 
     def describe(self) -> str:
+        if self.reason == "unanchored":
+            return (
+                f"waypoint {self.index}: unanchored, nearest street is "
+                f"{self.crow_m:.0f} m away"
+            )
         return (
             f"hop {self.index}: {self.reason}, {self.walked_m:.0f} m walked for "
             f"{self.crow_m:.0f} m of shape (x{self.detour_ratio:.1f})"
@@ -172,8 +177,14 @@ class ShapeRouter:
         nodes = _collapse_repeats(self._best_node_chain(sampled))
         corridor = _OutlineCorridor(outline, self.graph, self.corridor_m, self.corridor_weight)
         if len(nodes) < 2:
-            coord = self.graph.node_coord(nodes[0]) if nodes else outline[0]
-            return RoutedShape([coord], 0.0, 0, len(sampled), 0)
+            # Every waypoint matched the same node: the outline does not overlap
+            # this graph at all. Returning it as a tidy 0.0 km route is the worst
+            # outcome — the caller cannot tell success from total failure, and no
+            # hop exists for the detour cap to price.
+            raise UnroutableShapeError(
+                self._unanchored(sampled) or [HopDiagnostic(0, 0.0, 0.0, float("inf"), "unanchored")],
+                len(sampled),
+            )
 
         hops = len(nodes) - 1
         over_cap_budget = int(self.max_over_cap_share * hops)
@@ -217,6 +228,21 @@ class ShapeRouter:
         )
 
     # --- node selection ---------------------------------------------------
+
+    def _unanchored(self, sampled: list[Coordinate]) -> list[HopDiagnostic]:
+        """Waypoints with no street within `candidate_radius_m`.
+
+        Diagnostic only — a sparse network legitimately puts many waypoints past
+        the radius while still expressing the shape, so this must not by itself
+        reject a route. It exists to explain a collapse, not to cause one.
+        """
+        out: list[HopDiagnostic] = []
+        for i, p in enumerate(sampled):
+            near = self.graph.candidate_nodes(p, k=1, radius_m=self.candidate_radius_m)
+            d = haversine_distance_m(p, self.graph.node_coord(near[0]))
+            if d > self.candidate_radius_m:
+                out.append(HopDiagnostic(i, d, d, float("inf"), "unanchored"))
+        return out
 
     def _best_node_chain(self, sampled: list[Coordinate]) -> list[int]:
         """Viterbi over per-waypoint candidate nodes (Newson–Krumm map matching).
