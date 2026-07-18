@@ -6,12 +6,13 @@ committed Barcelona Eixample extract, and skip if it hasn't been materialized.
 
 import pytest
 
-from eval.fixtures import AREAS, GRAPHS_DIR
+from eval.fixtures import AREAS, GRAPHS_DIR, Fixture
 from models.schemas import Coordinate
 from services.road_graph import RoadGraph, cache_key
 from services.shape_router import (
     ShapeRouter,
     UnroutableShapeError,
+    outline_is_closed,
     resample_uniform,
 )
 from services.street_mapper import haversine_distance_m
@@ -138,3 +139,61 @@ def test_too_short_an_outline_routes_to_nothing_rather_than_crashing():
 
     assert routed.coordinates == []
     assert routed.distance_km == 0.0
+
+
+# --- loop closure -------------------------------------------------------------
+
+
+def test_closure_is_decided_by_the_outline_not_by_hope():
+    c = EIXAMPLE.center()
+    assert outline_is_closed(_square(c, 0.004))
+    # An open stroke: the two ends are a shape-width apart.
+    assert not outline_is_closed([c, Coordinate(lng=c.lng + 0.008, lat=c.lat)])
+    # Degenerate input is not a loop we can promise anything about.
+    assert not outline_is_closed([c])
+
+
+@requires_extract
+def test_a_closed_outline_returns_to_the_exact_node_it_started_from():
+    """The contract is node identity, not "near enough".
+
+    Nothing previously tied the last waypoint's node to the first: 6 of 7 closed
+    fixtures happened to agree, and square-prague — a clean closed square — landed
+    61.6 m apart. A runner sent back to a different corner has not run a loop.
+    """
+    routed = ShapeRouter(_graph()).route(_square(EIXAMPLE.center(), 0.004))
+
+    assert routed.is_loop
+    assert routed.coordinates[0] == routed.coordinates[-1]
+
+
+@requires_extract
+def test_square_prague_the_fixture_that_failed_closure_now_closes():
+    prague = AREAS["prague"]
+    graph = RoadGraph.for_bbox(prague.bbox, cache_dir=GRAPHS_DIR, allow_download=False)
+    outline = Fixture("t", "square", "prague", "easy", 3.0).target_polyline()
+
+    routed = ShapeRouter(graph).route(outline)
+
+    assert haversine_distance_m(routed.coordinates[0], routed.coordinates[-1]) == 0.0
+
+
+@requires_extract
+def test_an_open_outline_is_left_open_rather_than_padded_with_a_return_leg():
+    """Closing an open letterform costs 0.7-1.7 km of ground that isn't drawn.
+
+    Those routes are honest point-to-point runs; forcing them shut would buy a
+    green loop metric with a red distance and repeat ratio.
+    """
+    c = EIXAMPLE.center()
+    stroke = [
+        Coordinate(lng=c.lng - 0.004, lat=c.lat - 0.004),
+        Coordinate(lng=c.lng + 0.004, lat=c.lat - 0.004),
+        Coordinate(lng=c.lng + 0.004, lat=c.lat + 0.004),
+    ]
+
+    routed = ShapeRouter(_graph()).route(stroke)
+
+    assert not routed.is_loop
+    gap = haversine_distance_m(routed.coordinates[0], routed.coordinates[-1])
+    assert gap > 500  # still ends where the stroke ends

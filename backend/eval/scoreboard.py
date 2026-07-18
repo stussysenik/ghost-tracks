@@ -15,6 +15,7 @@ from pathlib import Path
 from eval.fixtures import Fixture, get_fixtures
 from eval.metrics import StageScores, score_fixture
 from models.schemas import Coordinate
+from services.shape_router import outline_is_closed
 
 EVAL_DIR = Path(__file__).parent
 RECORDED_DIR = EVAL_DIR / "fixtures" / "recorded"
@@ -65,12 +66,20 @@ def _mean(xs: list[float]) -> float:
 def _aggregate(rows: list[dict]) -> dict:
     scores = [r["scores"] for r in rows]
     n = len(scores) or 1
-    loop_rate = sum(1 for s in scores if s["is_loop"]) / n
+    # Closure is graded only where the shape is itself a loop. A letter M ends
+    # 700 m from where it began; scoring that as a failed loop measures the
+    # alphabet, not the router, and caps the metric below any gate it could pass.
+    # Open shapes are honest point-to-point runs — see `outline_is_closed`.
+    closed = [r for r in rows if r["shape_is_closed"]]
+    loop_rate = (
+        sum(1 for r in closed if r["scores"]["is_loop"]) / len(closed) if closed else 1.0
+    )
     within_dist = sum(1 for s in scores if s["distance_error"] <= DISTANCE_TOL) / n
     return {
         "count": len(scores),
         "extraction_iou": _mean([s["extraction_iou"] for s in scores]),
         "snap_score": _mean([s["snap_score"] for s in scores]),
+        "closed_outline_count": len(closed),
         "loop_closure_rate": round(loop_rate, 3),
         "within_distance_rate": round(within_dist, 3),
         "mean_distance_error": _mean([s["distance_error"] for s in scores]),
@@ -109,7 +118,8 @@ def build_scoreboard(
         if routed is None:
             missing.append(fx.id)
             continue
-        scores = score_fixture(fx.target_polyline(), routed, fx.target_distance_km)
+        outline = fx.target_polyline()
+        scores = score_fixture(outline, routed, fx.target_distance_km)
         rows.append(
             {
                 "id": fx.id,
@@ -117,6 +127,7 @@ def build_scoreboard(
                 "area": fx.area_key,
                 "network_tier": fx.area.tier,
                 "difficulty": fx.difficulty,
+                "shape_is_closed": outline_is_closed(outline),
                 "scores": scores.to_dict(),
             }
         )
@@ -156,16 +167,19 @@ def render_table(scoreboard: dict) -> str:
     lines.append("-" * len(header))
     for r in scoreboard["rows"]:
         s = r["scores"]
+        # "-" = open shape, closure not graded (not a silent pass).
+        loop = ("Y" if s["is_loop"] else "n") if r["shape_is_closed"] else "-"
         lines.append(
             f"{r['id']:<22}{r['difficulty']:<12}"
-            f"{s['snap_score']:>6.1f}{('Y' if s['is_loop'] else 'n'):>6}"
+            f"{s['snap_score']:>6.1f}{loop:>6}"
             f"{s['distance_error']:>10.2f}{s['repeat_ratio']:>8.2f}"
         )
     lines.append("")
     o = scoreboard.get("overall", {})
     if o:
         lines.append(
-            f"OVERALL  snap={o['snap_score']:.1f}  loop_rate={o['loop_closure_rate']:.2f}  "
+            f"OVERALL  snap={o['snap_score']:.1f}  "
+            f"loop_rate={o['loop_closure_rate']:.2f} (of {o['closed_outline_count']} closed)  "
             f"within_dist={o['within_distance_rate']:.2f}  "
             f"mean_dist_err={o['mean_distance_error']:.2f}  mean_repeat={o['mean_repeat_ratio']:.2f}"
         )

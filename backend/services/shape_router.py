@@ -34,7 +34,24 @@ DEFAULT_CANDIDATE_RADIUS_M = 200.0
 DEFAULT_EMISSION_WEIGHT = 1.5  # favour hugging the outline over walking less
 DEFAULT_CORRIDOR_M = 100.0  # how far off-outline counts as "one corridor width"
 DEFAULT_CORRIDOR_WEIGHT = 2.0  # cost multiplier per corridor width of deviation
+DEFAULT_CLOSURE_TOL_M = 50.0  # same tolerance the eval's `is_loop` grades against
 WALKING_KMH = 5.0
+
+
+def outline_is_closed(
+    outline: list[Coordinate], tol_m: float = DEFAULT_CLOSURE_TOL_M
+) -> bool:
+    """True when the outline's own ends meet — i.e. a loop was actually drawn.
+
+    Closure is a property of the *shape*, not something the router may impose. A
+    circle or a letter O is a loop; a letter M is a stroke that ends 700 m from
+    where it began. Forcing the latter shut would append up to 1.7 km of ground
+    the drawing does not contain, wrecking distance targeting and retracing the
+    letter's own streets — a green loop metric bought with two red ones.
+    """
+    if len(outline) < 3:
+        return False
+    return haversine_distance_m(outline[0], outline[-1]) <= tol_m
 
 
 # --- resampling ---------------------------------------------------------------
@@ -112,6 +129,15 @@ class RoutedShape:
     over_cap_hops: list[HopDiagnostic] = field(default_factory=list)
     max_detour_ratio: float = 0.0
 
+    @property
+    def is_loop(self) -> bool:
+        """Whether the route ends on the node it started from.
+
+        Derived from the geometry rather than stored alongside it, so it reports
+        what the route *is* and cannot drift from what the router intended.
+        """
+        return len(self.coordinates) > 1 and self.coordinates[0] == self.coordinates[-1]
+
 
 class UnroutableShapeError(RuntimeError):
     """Too many strokes are unexpressible in this area's street network."""
@@ -146,7 +172,9 @@ class ShapeRouter:
         emission_weight: float = DEFAULT_EMISSION_WEIGHT,
         corridor_m: float = DEFAULT_CORRIDOR_M,
         corridor_weight: float = DEFAULT_CORRIDOR_WEIGHT,
+        closure_tol_m: float = DEFAULT_CLOSURE_TOL_M,
     ) -> None:
+        self.closure_tol_m = closure_tol_m
         self.corridor_m = corridor_m
         self.corridor_weight = corridor_weight
         self.graph = graph
@@ -174,7 +202,8 @@ class ShapeRouter:
             return RoutedShape([], 0.0, 0, len(outline), 0)
 
         sampled = resample_uniform(outline, self.waypoints)
-        nodes = _collapse_repeats(self._best_node_chain(sampled))
+        closed = outline_is_closed(outline, self.closure_tol_m)
+        nodes = _collapse_repeats(self._best_node_chain(sampled, closed=closed))
         corridor = _OutlineCorridor(outline, self.graph, self.corridor_m, self.corridor_weight)
         if len(nodes) < 2:
             # Every waypoint matched the same node: the outline does not overlap
@@ -244,12 +273,21 @@ class ShapeRouter:
                 out.append(HopDiagnostic(i, d, d, float("inf"), "unanchored"))
         return out
 
-    def _best_node_chain(self, sampled: list[Coordinate]) -> list[int]:
-        """Viterbi over per-waypoint candidate nodes (Newson–Krumm map matching).
+    def _best_node_chain(
+        self, sampled: list[Coordinate], *, closed: bool = False
+    ) -> list[int]:
+        """Best node chain for the sampled outline, closed into a loop if it was one.
 
-        Emission cost is how far a candidate sits from its waypoint; transition
-        cost is how far the walked hop overshoots the outline's own step. Both are
-        in meters, so they add without an arbitrary scale factor.
+        For a closed outline the first and last waypoint are the same point, but
+        nothing forces their *nodes* to agree — they are independent layers of the
+        Viterbi, so the two ends land on whichever nodes happen to be locally
+        cheapest. That is why closure was luck: 6 of 7 closed fixtures agreed and
+        square-prague missed by 61.6 m.
+
+        Rather than snapping the tail onto the head after the fact (which would
+        fake the last few meters), pin both ends to the start node the free pass
+        already preferred and re-solve, so the tail is genuinely *routed back* to
+        it. Costs a second pass only when the free pass didn't already close.
         """
         candidates = [
             self.graph.candidate_nodes(
@@ -257,7 +295,21 @@ class ShapeRouter:
             )
             for p in sampled
         ]
+        chain = self._viterbi(sampled, candidates)
+        if closed and len(chain) > 1 and chain[0] != chain[-1]:
+            anchor = [chain[0]]
+            chain = self._viterbi(sampled, [anchor, *candidates[1:-1], anchor])
+        return chain
 
+    def _viterbi(
+        self, sampled: list[Coordinate], candidates: list[list[int]]
+    ) -> list[int]:
+        """Viterbi over per-waypoint candidate nodes (Newson–Krumm map matching).
+
+        Emission cost is how far a candidate sits from its waypoint; transition
+        cost is how far the walked hop overshoots the outline's own step. Both are
+        in meters, so they add without an arbitrary scale factor.
+        """
         cost: dict[int, float] = {
             n: self.emission_weight * haversine_distance_m(sampled[0], self.graph.node_coord(n))
             for n in candidates[0]

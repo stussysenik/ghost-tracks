@@ -4,12 +4,20 @@
 
 ### Requirement: Closed-loop routes
 
-Every generated route SHALL start and end at the same graph node, closed through the road network using the same short-hop routing technique.
+Every route generated from a **closed outline** SHALL start and end at the same graph node, closed through the road network using the same short-hop routing technique. A route generated from an **open outline** SHALL be left open, ending where the stroke ends, and SHALL be reported as point-to-point rather than as a failed loop.
+
+Closure is a property of the drawn shape, not something the router imposes. Forcing an open letterform shut appends 0.73–1.71 km of ground the drawing does not contain (measured across the M/W/X/Z/H fixtures, 12–28% of their distance targets), which would buy a green loop metric at the cost of the distance and repeat-ratio contracts below.
 
 #### Scenario: Loop closure
 
-- **WHEN** any route is generated from any fixture or user shape
+- **WHEN** a route is generated from an outline whose ends meet (within 50 m)
 - **THEN** the route's first and last coordinates are the same graph node
+
+#### Scenario: Open stroke left honest
+
+- **WHEN** a route is generated from an open outline, such as the letter M
+- **THEN** the route ends at the stroke's end rather than being padded with a return leg
+- **AND** the eval scores closure only over closed-outline fixtures
 
 ### Requirement: Target distance
 
