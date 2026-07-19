@@ -347,6 +347,90 @@ export interface AreaCheckResponse {
 }
 
 // ============================================================================
+// WORKOUT PLANNER TYPES (task 5)
+// ============================================================================
+
+/**
+ * One requested run in a plan.
+ *
+ * A plan is *shape-per-run*: every run carries its own theme and is routed
+ * independently, so it is judged by the same runnable-route contract as a
+ * one-off route. There is deliberately no cross-run geometric invariant — the
+ * runs share a start anchor and an order, nothing more.
+ */
+export interface PlanRunSpec {
+	/** What to draw, in the same words `/api/describe` takes. */
+	theme: string;
+	/** Requested length in km. Omit to size the shape to the area (see `RouteContract`). */
+	target_distance_km?: number;
+	/**
+	 * Requested climb in metres. Declared here, populated by 5.2 from graph
+	 * elevation — carried so the model is whole, not because 5.1 computes it.
+	 */
+	target_elevation_gain_m?: number;
+	/** Requested pace in minutes per km. User input; 5.2 turns it into a duration. */
+	target_pace_min_per_km?: number;
+}
+
+/** A plan: ordered runs from one shared start anchor. */
+export interface PlanSpec {
+	/** Optional plan name, e.g. "Marathon block week 3". */
+	name?: string;
+	/** Every run starts from here. */
+	anchor: SelectedArea;
+	/** Ordered; position in this array is the run order. */
+	runs: PlanRunSpec[];
+}
+
+/** Where a `PlanSpec` is invalid, and why. `path` points at the offending field. */
+export interface PlanIssue {
+	/** e.g. `runs[2].target_distance_km`, or `anchor`. */
+	path: string;
+	message: string;
+}
+
+/**
+ * A run that routed successfully.
+ *
+ * Extends `RouteContract`, which is the point of shape-per-run: a planned run is
+ * gradeable by exactly the rule a standalone route is, so `contractBadges()`
+ * applies to it with no planner-specific grading code.
+ */
+export interface PlannedRun extends RouteContract {
+	/** Position in the plan, 0-based. */
+	index: number;
+	spec: PlanRunSpec;
+	shape: ShapeIdea;
+	routed_coordinates: [number, number][];
+	distance_km: number;
+	duration_minutes: number;
+	waypoints: WaypointMarker[];
+	similarity_score: number;
+	bbox: BoundingBox;
+}
+
+/**
+ * A run that failed to route.
+ *
+ * Kept in the plan rather than collapsing the whole request: one unroutable
+ * theme should not discard six good runs, and a silently shortened plan would
+ * misreport what the user asked for.
+ */
+export interface FailedRun {
+	index: number;
+	spec: PlanRunSpec;
+	error: string;
+}
+
+/** Response from POST /api/plan. */
+export interface PlanResponse {
+	name?: string;
+	anchor: SelectedArea;
+	runs: PlannedRun[];
+	failed: FailedRun[];
+}
+
+// ============================================================================
 // UTILITY TYPES
 // ============================================================================
 
