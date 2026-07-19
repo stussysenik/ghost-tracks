@@ -245,8 +245,31 @@ export interface WaypointMarker {
 	instruction: string;
 }
 
+/**
+ * What the router promises about a route's runnability (backend tasks 4.1-4.3).
+ *
+ * Declared once and shared by the response and the route the UI holds, so a field
+ * cannot be added to one and silently forgotten in the other.
+ */
+export interface RouteContract {
+	/** Requested length in km. `null` = no target given; the shape was sized to the area. */
+	target_distance_km: number | null;
+	/** True when the target was unreachable and `distance_km` is the closest achievable. */
+	best_effort: boolean;
+	/** Fraction of the route retracing ground it already covered (0 = none). */
+	repeat_ratio: number;
+	/** True when the route returns to its start. Only meaningful if `shape_is_closed`. */
+	is_loop: boolean;
+	/**
+	 * Whether the drawn shape was a loop at all. A letter M is *meant* to end away
+	 * from its start; without this, `is_loop: false` cannot be told apart from a
+	 * circle that failed to close, and closure must be shown as ungraded, not failed.
+	 */
+	shape_is_closed: boolean;
+}
+
 /** A fully generated and routed route */
-export interface GeneratedRoute {
+export interface GeneratedRoute extends RouteContract {
 	shape: ShapeIdea;
 	routed_coordinates: [number, number][];
 	distance_km: number;
@@ -275,8 +298,18 @@ export interface GenerateResponse {
 	bbox: { min_lng: number; min_lat: number; max_lng: number; max_lat: number };
 }
 
+/** Request body for POST /api/describe */
+export interface DescribeRequest {
+	description: string;
+	/** Opt-in. Omit to size the shape to the area instead of a length. Backend clamps 1-30. */
+	target_distance_km?: number;
+	neighborhood?: string;
+	center?: { lng: number; lat: number };
+	area_name?: string;
+}
+
 /** Response from POST /api/describe */
-export interface DescribeResponse {
+export interface DescribeResponse extends RouteContract {
 	shape: ShapeIdea;
 	neighborhood: string;
 	bbox: { min_lng: number; min_lat: number; max_lng: number; max_lat: number };

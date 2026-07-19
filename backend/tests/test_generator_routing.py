@@ -126,3 +126,23 @@ def test_production_route_reports_the_runnable_contract():
 
     assert routed["is_loop"] is True  # a circle outline closes
     assert 0.0 <= routed["repeat_ratio"] < 1.0
+    assert routed["shape_is_closed"] is True
+
+
+def test_open_shape_is_reported_as_open_not_as_a_failed_loop():
+    """`is_loop` is unreadable without knowing whether closure was ever intended.
+
+    A letter M is meant to end where it does. Reporting only `is_loop=False` makes
+    that correct result indistinguishable from a circle that failed to close, and
+    forces any badge to render one of the two dishonestly — the silent-pass bug
+    4.1 fixed in the scoreboard, still live at the API boundary until now.
+    """
+    gen = _offline_generator()
+    closed = gen._route_on_graph(_outline("circle"), EIXAMPLE.bbox)
+    open_shape = gen._route_on_graph(_outline("letter M"), EIXAMPLE.bbox)
+
+    assert closed["shape_is_closed"] is True
+    assert open_shape["shape_is_closed"] is False
+    # The whole point: both may report is_loop=False, and only the new field
+    # separates "correctly open" from "failed to close".
+    assert open_shape["is_loop"] is False

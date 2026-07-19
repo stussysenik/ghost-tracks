@@ -29,7 +29,7 @@ from services.llm import (
 from services.neighborhood import NeighborhoodService
 from services.distance_target import route_to_distance
 from services.road_graph import DEFAULT_CACHE_DIR, RoadGraph
-from services.shape_router import ShapeRouter
+from services.shape_router import ShapeRouter, outline_is_closed
 from services.shape_templates import get_parametric_shape
 from services.shape_validator import ShapeValidator
 from services.street_mapper import StreetMapper, haversine_distance_m
@@ -185,6 +185,7 @@ class ShapeGenerator:
             best_effort=routed["best_effort"],
             repeat_ratio=routed["repeat_ratio"],
             is_loop=routed["is_loop"],
+            shape_is_closed=routed["shape_is_closed"],
         )
 
     # --- Private helpers ---
@@ -317,6 +318,11 @@ class ShapeGenerator:
             # it, so neither can drift from what the router actually produced.
             "repeat_ratio": routed.repeat_ratio,
             "is_loop": routed.is_loop,
+            # `is_loop` alone cannot be read honestly: a letter M is *supposed* to
+            # end where it does. Without this the UI cannot tell a correctly-open
+            # shape from a closed one that failed to close, and would have to render
+            # one of them as a lie. Same grading distinction the scoreboard makes.
+            "shape_is_closed": outline_is_closed(outline, router.closure_tol_m),
         }
 
     async def _route_waypoints(

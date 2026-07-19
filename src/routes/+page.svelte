@@ -44,8 +44,9 @@
 	onMount(() => {
 		try {
 			const saved = sessionStorage.getItem(SESSION_KEY);
-			if (saved) {
-				const route: GeneratedRoute = JSON.parse(saved);
+			const parsed: unknown = saved ? JSON.parse(saved) : null;
+			if (hasContract(parsed)) {
+				const route: GeneratedRoute = parsed;
 				generatedRoute = route;
 				mode = 'describe';
 				// Fly to the route after map loads
@@ -57,6 +58,25 @@
 			// ignore parse errors
 		}
 	});
+
+	/**
+	 * A persisted route is untrusted JSON, not a `GeneratedRoute`.
+	 *
+	 * Routes saved before the contract existed lack these fields, and the badges
+	 * would render `undefined%` while the type insisted they could not. Discarding
+	 * a stale entry costs one re-run once, at a deploy boundary; carrying it means
+	 * every badge has to defend against a value the type says is impossible.
+	 */
+	function hasContract(value: unknown): value is GeneratedRoute {
+		if (!value || typeof value !== 'object') return false;
+		const r = value as Partial<GeneratedRoute>;
+		return (
+			typeof r.repeat_ratio === 'number' &&
+			typeof r.is_loop === 'boolean' &&
+			typeof r.shape_is_closed === 'boolean' &&
+			typeof r.best_effort === 'boolean'
+		);
+	}
 
 	function saveRoute(route: GeneratedRoute) {
 		try {
@@ -82,7 +102,16 @@
 			similarity_score: data.similarity_score,
 			neighborhood: data.neighborhood,
 			bbox: [data.bbox.min_lng, data.bbox.min_lat, data.bbox.max_lng, data.bbox.max_lat],
-			alternative_neighborhoods: data.alternative_neighborhoods
+			alternative_neighborhoods: data.alternative_neighborhoods,
+			// The runnable contract travels with the route. These are listed explicitly
+			// rather than spread because this mapper is field-by-field: anything omitted
+			// here is dropped silently, and only the required fields on `RouteContract`
+			// make that omission a compile error instead of a missing badge.
+			target_distance_km: data.target_distance_km,
+			best_effort: data.best_effort,
+			repeat_ratio: data.repeat_ratio,
+			is_loop: data.is_loop,
+			shape_is_closed: data.shape_is_closed
 		};
 	}
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { WaypointMarker, GeneratedRoute } from '$types';
+	import { contractBadges, TONE } from '$lib/route-contract';
 	import { fly } from 'svelte/transition';
 
 	interface Props {
@@ -14,6 +15,9 @@
 
 	let isExpanded = $state(false);
 	let showMarkers = $state(true);
+
+	const badges = $derived(contractBadges(route));
+
 </script>
 
 <div
@@ -62,6 +66,19 @@
 					<span class="text-xs text-slate-400">{route.shape.description}</span>
 				</div>
 			{/if}
+
+			<!-- Runnable-route contract (tasks 4.1-4.3) -->
+			<div class="mt-2 flex flex-wrap items-center gap-1.5" data-testid="route-contract">
+				{#each badges as badge (badge.testid)}
+					<span
+						data-testid={badge.testid}
+						title={badge.title}
+						class="inline-block rounded-full px-2 py-0.5 text-xs font-medium {TONE[badge.tone]}"
+					>
+						{badge.label}
+					</span>
+				{/each}
+			</div>
 
 			<!-- Alternative neighborhoods -->
 			{#if route.alternative_neighborhoods && route.alternative_neighborhoods.length > 0 && onRetryNeighborhood}

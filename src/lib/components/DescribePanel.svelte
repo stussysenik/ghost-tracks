@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DescribeResponse } from '$types';
+	import type { DescribeRequest, DescribeResponse } from '$types';
 	import { getArea, isAreaBlocked } from '$lib/stores/area.svelte';
 
 	interface Props {
@@ -12,6 +12,17 @@
 	let isLoading = $state(false);
 	let error = $state('');
 	let currentStep = $state(0);
+
+	// Opt-in by design, mirroring the API: an absent `target_distance_km` means
+	// "size the shape to the area". A bare slider always holds a value and so
+	// could never express that, which is why the toggle exists rather than a
+	// default of 5 km silently becoming a request nobody made.
+	let useTargetDistance = $state(false);
+	let targetDistanceKm = $state(5);
+
+	// Matches the backend's clamp (ge=1.0, le=30.0) — sending outside it is a 422.
+	const MIN_KM = 1;
+	const MAX_KM = 30;
 
 	const area = $derived(getArea());
 	const blocked = $derived(isAreaBlocked());
@@ -50,11 +61,14 @@
 		startProgressSteps();
 
 		try {
-			const body: Record<string, unknown> = { description: description.trim() };
+			const body: DescribeRequest = { description: description.trim() };
 			const current = getArea();
 			if (current) {
 				body.center = { lng: current.lng, lat: current.lat };
 				body.area_name = current.label;
+			}
+			if (useTargetDistance) {
+				body.target_distance_km = targetDistanceKm;
 			}
 
 			const response = await fetch('/api/describe', {
@@ -103,6 +117,46 @@
 		/>
 		{#if isLoading}
 			<div class="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-ghost">✨</div>
+		{/if}
+	</div>
+
+	<div class="space-y-2">
+		<button
+			type="button"
+			data-testid="target-distance-toggle"
+			role="switch"
+			aria-checked={useTargetDistance}
+			disabled={isLoading}
+			onclick={() => (useTargetDistance = !useTargetDistance)}
+			class="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs
+				font-medium transition-colors disabled:opacity-50
+				{useTargetDistance ? 'bg-ghost/10 text-ghost' : 'glass text-slate-600'}"
+		>
+			<span>Set a target distance</span>
+			<span class="text-slate-400">
+				{useTargetDistance ? `${targetDistanceKm} km` : 'Fit to area'}
+			</span>
+		</button>
+
+		{#if useTargetDistance}
+			<div class="px-1">
+				<label for="target-distance" class="sr-only">Target distance in kilometers</label>
+				<input
+					id="target-distance"
+					data-testid="target-distance-slider"
+					type="range"
+					min={MIN_KM}
+					max={MAX_KM}
+					step="0.5"
+					bind:value={targetDistanceKm}
+					disabled={isLoading}
+					class="w-full accent-ghost disabled:opacity-50"
+				/>
+				<div class="flex justify-between text-[10px] text-slate-400">
+					<span>{MIN_KM} km</span>
+					<span>{MAX_KM} km</span>
+				</div>
+			</div>
 		{/if}
 	</div>
 

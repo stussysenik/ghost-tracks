@@ -142,7 +142,12 @@ class DescribeResponse(BaseModel):
     # Measured on the returned geometry by the same function the eval grades with,
     # so the badge a runner sees and the scoreboard can never disagree.
     repeat_ratio: float = 0.0
+    # `is_loop` is only gradeable against `shape_is_closed`. A letter M ends 700 m
+    # from where it began by design; without knowing the outline was open, a client
+    # cannot tell that correct result from a closed shape that failed to close, and
+    # must render one of them dishonestly.
     is_loop: bool = False
+    shape_is_closed: bool = False
 
 
 class HealthResponse(BaseModel):
