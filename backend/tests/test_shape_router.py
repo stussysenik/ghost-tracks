@@ -197,3 +197,136 @@ def test_an_open_outline_is_left_open_rather_than_padded_with_a_return_leg():
     assert not routed.is_loop
     gap = haversine_distance_m(routed.coordinates[0], routed.coordinates[-1])
     assert gap > 500  # still ends where the stroke ends
+
+
+# --- repeated-street penalty ---------------------------------------------------
+
+
+def _ladder_graph() -> RoadGraph:
+    """A→C reachable two ways: straight through B, or parallel through D.
+
+    Deliberately asymmetric — the B side is shorter, so an unpenalized router
+    takes it in *both* directions and retraces every meter. That is the exact
+    situation the spec's scenario describes, reduced to the smallest graph that
+    can express it.
+    """
+    import networkx as nx
+
+    g = nx.MultiDiGraph()
+    coords = {
+        0: (0.0, 0.0),  # A — west end
+        1: (0.001, 0.0),  # B — mid, on the direct line
+        2: (0.002, 0.0),  # C — east end
+        3: (0.001, 0.0006),  # D — mid, on the parallel street to the north
+    }
+    for n, (lng, lat) in coords.items():
+        g.add_node(n, x=lng, y=lat)
+
+    def link(u: int, v: int) -> None:
+        length = haversine_distance_m(
+            Coordinate(lng=coords[u][0], lat=coords[u][1]),
+            Coordinate(lng=coords[v][0], lat=coords[v][1]),
+        )
+        g.add_edge(u, v, length=length)
+        g.add_edge(v, u, length=length)
+
+    link(0, 1)
+    link(1, 2)  # direct: the short way
+    link(0, 3)
+    link(3, 2)  # parallel: slightly longer
+    return RoadGraph(g)
+
+
+def _out_and_back() -> list[Coordinate]:
+    """An outline that walks A→C and back — pure doubling-back by construction."""
+    return [
+        Coordinate(lng=0.0, lat=0.0),
+        Coordinate(lng=0.002, lat=0.0),
+        Coordinate(lng=0.0, lat=0.0),
+    ]
+
+
+def _router(weight: float) -> ShapeRouter:
+    # corridor_weight=0 isolates the repeat penalty: otherwise the corridor cost
+    # would also push the return leg around, and the test would not be measuring
+    # the thing it names.
+    return ShapeRouter(
+        _ladder_graph(),
+        waypoints=3,
+        corridor_weight=0.0,
+        repeat_weight=weight,
+        candidate_radius_m=300.0,
+    )
+
+
+def test_unpenalized_router_doubles_back_along_the_same_street():
+    """Red half of the pair: without the penalty the parallel street is unused."""
+    routed = _router(0.0).route(_out_and_back())
+
+    assert 3 not in _node_ids_used(routed)
+
+
+def test_penalty_prefers_a_parallel_street_over_retracing_one():
+    """The spec scenario: same shape, penalty on, the return leg goes around."""
+    routed = _router(ShapeRouter(_ladder_graph()).repeat_weight).route(_out_and_back())
+
+    assert 3 in _node_ids_used(routed)
+
+
+def _node_ids_used(routed) -> set[int]:
+    """Which of the ladder's nodes the route actually passed through."""
+    graph = _ladder_graph()
+    used = set()
+    for c in routed.coordinates:
+        for n in graph.graph.nodes:
+            if haversine_distance_m(c, graph.node_coord(n)) < 1.0:
+                used.add(n)
+    return used
+
+
+def test_penalty_state_does_not_leak_between_routes():
+    """Distance targeting calls `route()` repeatedly on rescaled outlines.
+
+    A counter shared across calls would make each attempt's cost depend on the
+    attempts discarded before it, and the search would stop being reproducible.
+    """
+    router = _router(0.25)
+    outline = _out_and_back()
+
+    first = router.route(outline)
+    second = router.route(outline)
+
+    assert first.coordinates == second.coordinates
+    assert first.distance_km == second.distance_km
+
+
+def test_reported_distance_is_true_length_not_penalized_cost():
+    """The penalty steers path choice; it must never inflate reported distance."""
+    penalized = _router(4.0).route(_out_and_back())
+
+    true_m = 0.0
+    for a, b in zip(penalized.coordinates, penalized.coordinates[1:]):
+        true_m += haversine_distance_m(a, b)
+
+    assert penalized.distance_km == pytest.approx(true_m / 1000.0, abs=0.01)
+
+
+def test_route_reports_its_repeat_ratio():
+    """The contract requires the ratio on the response, not just in the eval."""
+    retracing = _router(0.0).route(_out_and_back())
+    avoiding = _router(0.25).route(_out_and_back())
+
+    assert retracing.repeat_ratio > avoiding.repeat_ratio
+
+
+def test_repeat_penalty_keys_edges_undirected():
+    """Walking a street the other way is still retracing it.
+
+    A directed key would score a perfect out-and-back as pristine.
+    """
+    from services.shape_router import _RepeatPenalty
+
+    penalty = _RepeatPenalty(lambda u, v, data: 100.0, weight=1.0)
+    penalty.record([1, 2])
+
+    assert penalty.edge_cost(2, 1, {"length": 100.0}) == 200.0

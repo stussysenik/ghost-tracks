@@ -183,6 +183,8 @@ class ShapeGenerator:
             alternative_neighborhoods=alternative_neighborhoods,
             target_distance_km=target_distance_km,
             best_effort=routed["best_effort"],
+            repeat_ratio=routed["repeat_ratio"],
+            is_loop=routed["is_loop"],
         )
 
     # --- Private helpers ---
@@ -311,6 +313,10 @@ class ShapeGenerator:
             "duration_minutes": routed.duration_minutes,
             "outline": outline,
             "best_effort": best_effort,
+            # Both derived from the routed geometry rather than tracked alongside
+            # it, so neither can drift from what the router actually produced.
+            "repeat_ratio": routed.repeat_ratio,
+            "is_loop": routed.is_loop,
         }
 
     async def _route_waypoints(

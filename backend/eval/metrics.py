@@ -22,6 +22,7 @@ from services.shape_validator import (
     _modified_hausdorff_distance,
     hausdorff_distance,
 )
+from services.route_metrics import repeat_ratio  # noqa: F401 — re-exported, see below
 from services.street_mapper import haversine_distance_m
 
 
@@ -88,53 +89,9 @@ def distance_error(routed_km: float, target_km: float) -> float:
     return abs(routed_km - target_km) / target_km
 
 
-def repeat_ratio(route: list[Coordinate], cell_m: float = 25.0) -> float:
-    """Fraction of the route that retraces ground already covered.
-
-    The polyline is walked at ~`cell_m` resolution and each step is binned into a
-    square grid cell (local equirectangular meters). The ratio is
-    `1 - unique_cells / visited_cells`: an out-and-back on the same street
-    approaches ~0.5, a clean non-overlapping loop approaches ~0.0.
-    """
-    if len(route) < 2:
-        return 0.0
-
-    lat0 = route[0].lat
-    import math
-
-    m_per_deg_lat = 111_320.0
-    m_per_deg_lng = 111_320.0 * math.cos(math.radians(lat0))
-
-    def cell_of(c: Coordinate) -> tuple[int, int]:
-        x_m = c.lng * m_per_deg_lng
-        y_m = c.lat * m_per_deg_lat
-        return (int(x_m // cell_m), int(y_m // cell_m))
-
-    # Sample by cumulative arc length, not per segment: the sample count must depend
-    # on how far the route goes, never on how densely its polyline is vertexed.
-    visited: list[tuple[int, int]] = []
-    next_at = 0.0
-    walked = 0.0
-    for a, b in zip(route, route[1:]):
-        seg = haversine_distance_m(a, b)
-        while next_at <= walked + seg:
-            frac = (next_at - walked) / seg if seg > 0 else 0.0
-            visited.append(
-                cell_of(
-                    Coordinate(
-                        lng=a.lng + (b.lng - a.lng) * frac,
-                        lat=a.lat + (b.lat - a.lat) * frac,
-                    )
-                )
-            )
-            next_at += cell_m
-        walked += seg
-    visited.append(cell_of(route[-1]))
-
-    if not visited:
-        return 0.0
-    unique = len(set(visited))
-    return round(1.0 - unique / len(visited), 4)
+# `repeat_ratio` is re-exported from `services.route_metrics` (imported above) so
+# the scoreboard grades routes by exactly the function the router reports on them.
+# Callers keep importing it from here; there is only ever one implementation.
 
 
 # --- Aggregated per-stage scores ----------------------------------------------

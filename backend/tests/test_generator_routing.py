@@ -114,3 +114,15 @@ def test_untargeted_route_is_unchanged():
 
     assert routed["outline"] == outline
     assert routed["best_effort"] is False
+
+
+def test_production_route_reports_the_runnable_contract():
+    """Loop and repeat ratio must survive the trip out to the response.
+
+    The router deriving them is not enough — 4.4's badges read the response, and
+    a field that stops at the service boundary is a contract that isn't kept.
+    """
+    routed = _offline_generator()._route_on_graph(_outline("circle"), EIXAMPLE.bbox)
+
+    assert routed["is_loop"] is True  # a circle outline closes
+    assert 0.0 <= routed["repeat_ratio"] < 1.0

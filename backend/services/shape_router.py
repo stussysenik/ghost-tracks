@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 from models.schemas import Coordinate
 from services.road_graph import NoRouteError, RoadGraph
+from services.route_metrics import repeat_ratio
 from services.street_mapper import haversine_distance_m
 
 DEFAULT_WAYPOINTS = 80
@@ -34,6 +35,11 @@ DEFAULT_CANDIDATE_RADIUS_M = 200.0
 DEFAULT_EMISSION_WEIGHT = 1.5  # favour hugging the outline over walking less
 DEFAULT_CORRIDOR_M = 100.0  # how far off-outline counts as "one corridor width"
 DEFAULT_CORRIDOR_WEIGHT = 2.0  # cost multiplier per corridor width of deviation
+# Cost multiplier per prior traversal of an edge. Directly opposed to the corridor
+# weight above: the only way to avoid retracing a street is to leave the outline
+# it sits on, so this trades repeat ratio against snap fidelity. Swept on the
+# fixtures rather than guessed — see the 4.3 notes in tasks.md.
+DEFAULT_REPEAT_WEIGHT = 0.25
 DEFAULT_CLOSURE_TOL_M = 50.0  # same tolerance the eval's `is_loop` grades against
 WALKING_KMH = 5.0
 
@@ -130,6 +136,17 @@ class RoutedShape:
     max_detour_ratio: float = 0.0
 
     @property
+    def repeat_ratio(self) -> float:
+        """Fraction of this route that retraces ground it already covered.
+
+        Derived from the geometry for the same reason `is_loop` is: it reports
+        what the route *is*, so it cannot drift from what the router intended.
+        Shares its definition with the eval scoreboard (`services.route_metrics`),
+        so the contract badge and the gate can never disagree.
+        """
+        return repeat_ratio(self.coordinates)
+
+    @property
     def is_loop(self) -> bool:
         """Whether the route ends on the node it started from.
 
@@ -175,11 +192,13 @@ class ShapeRouter:
         emission_weight: float = DEFAULT_EMISSION_WEIGHT,
         corridor_m: float = DEFAULT_CORRIDOR_M,
         corridor_weight: float = DEFAULT_CORRIDOR_WEIGHT,
+        repeat_weight: float = DEFAULT_REPEAT_WEIGHT,
         closure_tol_m: float = DEFAULT_CLOSURE_TOL_M,
     ) -> None:
         self.closure_tol_m = closure_tol_m
         self.corridor_m = corridor_m
         self.corridor_weight = corridor_weight
+        self.repeat_weight = repeat_weight
         self.graph = graph
         self.waypoints = waypoints
         self.detour_cap = detour_cap
@@ -208,6 +227,7 @@ class ShapeRouter:
         closed = outline_is_closed(outline, self.closure_tol_m)
         nodes = _collapse_repeats(self._best_node_chain(sampled, closed=closed))
         corridor = _OutlineCorridor(outline, self.graph, self.corridor_m, self.corridor_weight)
+        cost = _RepeatPenalty(corridor.edge_cost, self.repeat_weight)
         if len(nodes) < 2:
             # Every waypoint matched the same node: the outline does not overlap
             # this graph at all. Returning it as a tidy 0.0 km route is the worst
@@ -228,9 +248,13 @@ class ShapeRouter:
         for i, (u, v) in enumerate(zip(nodes, nodes[1:])):
             crow = self.graph.straight_line_m(u, v)
             try:
-                path = self.graph.path_nodes(u, v, weight=corridor.edge_cost)
+                path = self.graph.path_nodes(u, v, weight=cost.edge_cost)
                 hop_coords = self.graph.path_coords(path)
+                # Length is read from the graph's real `length`, never from the
+                # penalized cost — the penalty steers the choice of path, it must
+                # never inflate the distance the route reports walking.
                 walked = self.graph.path_length_m(path)
+                cost.record(path)
                 ratio = walked / crow if crow > 0 else 1.0
                 if walked > self.cap_floor_m and ratio > self.detour_cap:
                     over_cap.append(HopDiagnostic(i, crow, walked, ratio, "detour"))
@@ -358,6 +382,50 @@ class ShapeRouter:
             chain.append(node)
         chain.reverse()
         return chain
+
+
+class _RepeatPenalty:
+    """Escalates an edge's cost on each prior traversal *within the same route*.
+
+    Wraps the corridor cost rather than folding into it: the corridor prices where
+    an edge sits relative to the drawing, this prices how often the route has
+    already used it. Keeping them separate is what lets the weights be swept
+    independently — they pull in opposite directions (see below).
+
+    Two properties this relies on:
+
+    - **The key is undirected.** Running back down a street the other way is still
+      retracing it, and a directed key would score an out-and-back as pristine.
+    - **State is per-route.** The instance is built inside `route()`, so the
+      distance-targeting search — which calls `route()` up to four times on
+      rescaled outlines — never inherits penalties from an attempt it discarded.
+      A shared counter would make each attempt's cost depend on the history of
+      attempts before it, and the search would stop being reproducible.
+
+    Note this deliberately does not enter the Viterbi: node selection picks the
+    *anchors*, and an anchor cannot be "repeated" — only the path between anchors
+    can. Pricing repeats where paths are actually chosen is both the smaller
+    change and the correct one.
+    """
+
+    def __init__(self, base, weight: float) -> None:
+        self._base = base
+        self._weight = weight
+        self._counts: dict[tuple[int, int], int] = {}
+
+    def edge_cost(self, u: int, v: int, data: dict) -> float:
+        seen = self._counts.get(_edge_key(u, v), 0)
+        return self._base(u, v, data) * (1.0 + self._weight * seen)
+
+    def record(self, path: list[int]) -> None:
+        """Mark every edge of a chosen hop as traversed once more."""
+        for a, b in zip(path, path[1:]):
+            key = _edge_key(a, b)
+            self._counts[key] = self._counts.get(key, 0) + 1
+
+
+def _edge_key(u: int, v: int) -> tuple[int, int]:
+    return (u, v) if u <= v else (v, u)
 
 
 class _OutlineCorridor:

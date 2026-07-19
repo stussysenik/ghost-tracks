@@ -138,6 +138,11 @@ class DescribeResponse(BaseModel):
     # measured truth, never the target rounded into place.
     target_distance_km: float | None = None
     best_effort: bool = False
+    # Fraction of the route that retraces ground it already covered (0 = none).
+    # Measured on the returned geometry by the same function the eval grades with,
+    # so the badge a runner sees and the scoreboard can never disagree.
+    repeat_ratio: float = 0.0
+    is_loop: bool = False
 
 
 class HealthResponse(BaseModel):
