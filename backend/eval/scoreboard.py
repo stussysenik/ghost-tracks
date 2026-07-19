@@ -21,6 +21,10 @@ from services.shape_router import outline_is_closed
 EVAL_DIR = Path(__file__).parent
 RECORDED_DIR = EVAL_DIR / "fixtures" / "recorded"
 SCOREBOARD_PATH = EVAL_DIR / "scoreboard.json"
+# The owned-graph router's board. Committed, and load-bearing: the Task 4.5 gate
+# reads it back as the reference for the snapping-regression check, so it cannot
+# go stale unnoticed the way it did across 4.1-4.3.
+GRAPH_SCOREBOARD_PATH = EVAL_DIR / "scoreboard_graph_router.json"
 
 # Runnability thresholds (design D4 / Task 4 gates) — descriptive here, asserted later.
 LOOP_TOL_M = 50.0
