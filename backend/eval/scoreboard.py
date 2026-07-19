@@ -98,6 +98,11 @@ def _aggregate(rows: list[dict]) -> dict:
     return {
         "count": len(scores),
         "extraction_iou": _mean([s["extraction_iou"] for s in scores]),
+        # The snapping regression gate. Only comparable across runs of the *same*
+        # fixture set — it is in meters, so large fixtures dominate the mean and a
+        # changed fixture list invalidates the comparison. `snap_score` sits beside
+        # it as a legibility indicator and is deliberately no longer the gate.
+        "mean_abs_deviation_m": _mean([s["mean_abs_deviation_m"] for s in scores]),
         "snap_score": _mean([s["snap_score"] for s in scores]),
         "closed_outline_count": len(closed),
         "loop_closure_rate": round(loop_rate, 3),
@@ -185,7 +190,7 @@ def render_table(scoreboard: dict) -> str:
                  f"scored={scoreboard['fixtures_scored']}  missing={len(scoreboard['fixtures_missing'])}")
     lines.append("")
     header = (
-        f"{'fixture':<22}{'tier':<12}{'snap':>6}{'loop':>6}"
+        f"{'fixture':<22}{'tier':<12}{'dev_m':>7}{'snap':>6}{'loop':>6}"
         f"{'scale':>7}{'dist_err':>10}{'repeat':>8}"
     )
     lines.append(header)
@@ -198,14 +203,14 @@ def render_table(scoreboard: dict) -> str:
         err = f"{s['distance_error']:.2f}{'!' if r.get('best_effort') else ' '}"
         lines.append(
             f"{r['id']:<22}{r['difficulty']:<12}"
-            f"{s['snap_score']:>6.1f}{loop:>6}"
+            f"{s['mean_abs_deviation_m']:>7.1f}{s['snap_score']:>6.1f}{loop:>6}"
             f"{r.get('scale', 1.0):>7.2f}{err:>10}{s['repeat_ratio']:>8.2f}"
         )
     lines.append("")
     o = scoreboard.get("overall", {})
     if o:
         lines.append(
-            f"OVERALL  snap={o['snap_score']:.1f}  "
+            f"OVERALL  dev={o['mean_abs_deviation_m']:.1f}m (gate)  snap={o['snap_score']:.1f} (indicator)  "
             f"loop_rate={o['loop_closure_rate']:.2f} (of {o['closed_outline_count']} closed)  "
             f"within_dist={o['within_distance_rate']:.2f}  "
             f"mean_dist_err={o['mean_distance_error']:.2f}  mean_repeat={o['mean_repeat_ratio']:.2f}"

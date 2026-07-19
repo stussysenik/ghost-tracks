@@ -20,6 +20,7 @@ from models.schemas import Coordinate
 from services.shape_validator import (
     _compute_diameter,
     _modified_hausdorff_distance,
+    _pooled_deviations,
     hausdorff_distance,
 )
 from services.route_metrics import repeat_ratio  # noqa: F401 — re-exported, see below
@@ -57,6 +58,29 @@ def discrete_frechet_distance(a: list[Coordinate], b: list[Coordinate]) -> float
                 curr[j] = max(min(prev[j], prev[j - 1], curr[j - 1]), d)
         prev, curr = curr, prev
     return prev[m - 1]
+
+
+def mean_abs_deviation_m(target: list[Coordinate], routed: list[Coordinate]) -> float:
+    """Mean distance in meters between the route and the outline it aimed at.
+
+    This is the *regression* instrument for snapping; `snap_score` is not. Once a
+    pass rescales the shape to hit a distance target, `snap_score` confounds two
+    independent things, because it divides by shape diameter: how tightly the
+    router hugs the outline, and how big the outline is. Task 4.2 shrank the
+    outline faster than it shrank the error, so a router that hugged *better* in
+    meters (triangle-scottsdale 185 -> 95 m) scored worse. Meters do not move
+    when the shape does.
+
+    The trade is deliberate and runs the other way: this number is **not
+    scale-free**, so it must never be compared across fixtures of different sizes
+    — 40 m of wobble is tight on a 5 km shape and gross on a 300 m one. It is
+    valid only as a same-fixture before/after comparison, which is exactly what a
+    regression gate is. Cross-fixture legibility stays `snap_score`'s job.
+    """
+    if not target or not routed:
+        return float("inf")
+    deviations = _pooled_deviations(target, routed)
+    return sum(deviations) / len(deviations)
 
 
 # --- Runnability ---------------------------------------------------------------
@@ -113,7 +137,8 @@ class StageScores:
     modified_hausdorff_m: float
     frechet_m: float
     diameter_m: float
-    snap_score: float  # blended, higher = better
+    mean_abs_deviation_m: float  # regression gate — scale-free of shape size, not of fixture
+    snap_score: float  # legibility indicator, higher = better; NOT a regression gate
 
     # runnability
     routed_km: float
@@ -166,6 +191,7 @@ def score_fixture(
             modified_hausdorff_m=float("inf"),
             frechet_m=float("inf"),
             diameter_m=diameter,
+            mean_abs_deviation_m=float("inf"),
             snap_score=0.0,
             routed_km=route_length_km(routed),
             target_km=target_km,
@@ -186,6 +212,7 @@ def score_fixture(
         modified_hausdorff_m=round(mhd, 1),
         frechet_m=round(frechet, 1),
         diameter_m=round(diameter, 1),
+        mean_abs_deviation_m=round(mean_abs_deviation_m(target, routed), 1),
         snap_score=_snap_score(hd, mhd, frechet, diameter),
         routed_km=round(routed_km, 3),
         target_km=target_km,

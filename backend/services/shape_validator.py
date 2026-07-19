@@ -79,6 +79,23 @@ def hausdorff_distance(
     return max(directed_hd(points_a, points_b), directed_hd(points_b, points_a))
 
 
+def _pooled_deviations(
+    points_a: list[Coordinate],
+    points_b: list[Coordinate],
+) -> list[float]:
+    """Nearest-neighbour distances in meters, pooled over both directions.
+
+    Symmetric on purpose: a→b alone misses stretches of the shape the route never
+    covered, b→a alone misses the route wandering off it. Both are infidelity.
+    """
+    from services.street_mapper import haversine_distance_m
+
+    def directed_distances(src: list[Coordinate], tgt: list[Coordinate]) -> list[float]:
+        return [min(haversine_distance_m(s, t) for t in tgt) for s in src]
+
+    return directed_distances(points_a, points_b) + directed_distances(points_b, points_a)
+
+
 def _modified_hausdorff_distance(
     points_a: list[Coordinate],
     points_b: list[Coordinate],
@@ -88,15 +105,7 @@ def _modified_hausdorff_distance(
 
     This is robust to single-point outliers from Mapbox routing quirks.
     """
-    from services.street_mapper import haversine_distance_m
-
-    def directed_distances(src: list[Coordinate], tgt: list[Coordinate]) -> list[float]:
-        return [min(haversine_distance_m(s, t) for t in tgt) for s in src]
-
-    d_ab = directed_distances(points_a, points_b)
-    d_ba = directed_distances(points_b, points_a)
-    all_dists = d_ab + d_ba
-    return float(np.percentile(all_dists, percentile))
+    return float(np.percentile(_pooled_deviations(points_a, points_b), percentile))
 
 
 def _resample_curve(points: list[Coordinate], n: int) -> list[Coordinate]:

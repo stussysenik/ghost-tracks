@@ -7,6 +7,7 @@ from eval.metrics import (
     distance_error,
     is_loop,
     loop_closure_gap_m,
+    mean_abs_deviation_m,
     repeat_ratio,
     route_length_km,
     score_fixture,
@@ -148,3 +149,61 @@ def test_score_fixture_dict_roundtrip():
     sq = _square(LNG0, LAT0, 0.005)
     d = score_fixture(sq, sq, route_length_km(sq)).to_dict()
     assert set(d) >= {"snap_score", "is_loop", "distance_error", "repeat_ratio", "frechet_m"}
+
+
+# --- mean absolute deviation: the snapping regression instrument ---------------
+
+
+def _shifted(points: list[Coordinate], d_lng: float) -> list[Coordinate]:
+    """Rigidly shift a shape east, so every vertex deviates by exactly the shift."""
+    return [Coordinate(lng=p.lng + d_lng, lat=p.lat) for p in points]
+
+
+def test_mean_abs_deviation_equals_a_rigid_shift():
+    """A rigid shift makes the mean deviation exactly the shift distance.
+
+    Measured on a constant-latitude line on purpose: a longitude shift is only a
+    constant ground distance where the latitude is constant, so a lat-spanning
+    square would make the expected value a mean of unequal shifts, not one shift.
+    """
+    line = [Coordinate(lng=LNG0 + i * 0.001, lat=LAT0) for i in range(6)]
+    moved = _shifted(line, 0.0004)
+    expected = haversine_distance_m(line[0], moved[0])
+    assert math.isclose(mean_abs_deviation_m(line, moved), expected, rel_tol=1e-6)
+
+
+def test_mean_abs_deviation_is_symmetric():
+    """Deviation must not depend on which polyline is named the target."""
+    sq = _square(LNG0, LAT0, 0.005)
+    moved = _shifted(sq, 0.0004)
+    assert math.isclose(
+        mean_abs_deviation_m(sq, moved), mean_abs_deviation_m(moved, sq), rel_tol=1e-9
+    )
+
+
+def test_deviation_improves_where_snap_score_falsely_regresses():
+    """The confound that retired `snap_score` as the regression gate.
+
+    Reproduces Task 4.2's triangle-scottsdale finding on synthetic geometry: the
+    distance search shrinks the outline, the router hugs it *better* in meters,
+    and `snap_score` still drops because it divides by a diameter that shrank
+    faster than the error did. The gate must follow the meters, not the ratio.
+    """
+    big = _square(LNG0, LAT0, 0.010)
+    big_route = _shifted(big, 0.0018)
+
+    # Outline shrunk ~3.3x to hit a distance target; absolute error only halved.
+    small = _square(LNG0, LAT0, 0.003)
+    small_route = _shifted(small, 0.0009)
+
+    big_s = score_fixture(big, big_route, target_km=5.0)
+    small_s = score_fixture(small, small_route, target_km=5.0)
+
+    # The router genuinely improved: half the deviation on the ground.
+    assert small_s.mean_abs_deviation_m < big_s.mean_abs_deviation_m
+    assert math.isclose(
+        small_s.mean_abs_deviation_m, big_s.mean_abs_deviation_m / 2, rel_tol=0.02
+    )
+    # ...and `snap_score` calls that same improvement a regression. This assertion
+    # failing would mean the confound is gone and the gate could go back.
+    assert small_s.snap_score < big_s.snap_score
