@@ -364,11 +364,23 @@ export interface PlanRunSpec {
 	/** Requested length in km. Omit to size the shape to the area (see `RouteContract`). */
 	target_distance_km?: number;
 	/**
-	 * Requested climb in metres. Declared here, populated by 5.2 from graph
-	 * elevation — carried so the model is whole, not because 5.1 computes it.
+	 * Requested climb in metres. **Currently rejected by `validatePlanSpec`.**
+	 *
+	 * 5.1 declared this expecting 5.2 to fill it from graph elevation. There is no
+	 * graph elevation: the OSM walk extracts carry `x`/`y`/`street_count` on nodes
+	 * and nothing vertical, and nothing in the pipeline calls osmnx's elevation
+	 * helpers. Accepting a target the system cannot measure would be the silent
+	 * form of the dishonesty `target_distance_km` refuses loudly, so it is
+	 * refused. Kept in the model because the field is intended, not wrong — see
+	 * `ELEVATION_UNSUPPORTED` for what has to exist before it is accepted.
 	 */
 	target_elevation_gain_m?: number;
-	/** Requested pace in minutes per km. User input; 5.2 turns it into a duration. */
+	/**
+	 * Requested pace in minutes per km. Unlike distance, this is never graded:
+	 * the route has a measured distance to compare a target against, but no
+	 * measured pace — pace belongs to the runner. It is a conversion factor,
+	 * and its only effect is `duration_minutes`.
+	 */
 	target_pace_min_per_km?: number;
 }
 
@@ -381,6 +393,9 @@ export interface PlanSpec {
 	/** Ordered; position in this array is the run order. */
 	runs: PlanRunSpec[];
 }
+
+/** Whether a run's duration came from the user's pace or from a fixed assumption. */
+export type DurationSource = 'pace_target' | 'default_estimate';
 
 /** Where a `PlanSpec` is invalid, and why. `path` points at the offending field. */
 export interface PlanIssue {
@@ -404,6 +419,17 @@ export interface PlannedRun extends RouteContract {
 	routed_coordinates: [number, number][];
 	distance_km: number;
 	duration_minutes: number;
+	/**
+	 * Which claim `duration_minutes` is making.
+	 *
+	 * `pace_target` — distance at the pace the user asked for.
+	 * `default_estimate` — the backend's fixed 5 km/h, which is a *walk*. Shown as
+	 * an assumption, not a prediction, for the same reason `shape_is_closed` marks
+	 * ungraded closure: a number the user supplied and a number the system made up
+	 * are different claims, and collapsing them into one field hides which one is
+	 * on screen.
+	 */
+	duration_source: DurationSource;
 	waypoints: WaypointMarker[];
 	similarity_score: number;
 	bbox: BoundingBox;

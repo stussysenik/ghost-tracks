@@ -8,7 +8,7 @@
  */
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { validatePlanSpec } from '$lib/plan';
+import { runDuration, validatePlanSpec } from '$lib/plan';
 import type { FailedRun, PlanRunSpec, PlanSpec, PlannedRun, SelectedArea } from '$types';
 
 const BACKEND_URL = env.BACKEND_URL || 'http://127.0.0.1:8000';
@@ -50,7 +50,10 @@ async function routeRun(
 			shape: data.shape,
 			routed_coordinates: data.routed_coordinates,
 			distance_km: data.distance_km,
-			duration_minutes: data.duration_minutes,
+			// The one field a plan derives rather than passes through: the backend
+			// cannot compute this, because pace is the user's input and the backend
+			// never sees it. Everything else stays verbatim.
+			...runDuration(data.distance_km, run.target_pace_min_per_km, data.duration_minutes),
 			waypoints: data.waypoints,
 			similarity_score: data.similarity_score,
 			bbox: data.bbox,

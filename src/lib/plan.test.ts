@@ -6,7 +6,14 @@
  * so that deleting the rule it covers fails it and nothing else.
  */
 import { describe, expect, it } from 'vitest';
-import { MAX_DISTANCE_KM, MAX_RUNS, MIN_DISTANCE_KM, validatePlanSpec } from './plan';
+import {
+	ELEVATION_UNSUPPORTED,
+	MAX_DISTANCE_KM,
+	MAX_RUNS,
+	MIN_DISTANCE_KM,
+	runDuration,
+	validatePlanSpec
+} from './plan';
 import type { PlanSpec } from '$types';
 
 const ANCHOR = { lng: 14.42, lat: 50.08, label: 'Staré Město, Prague' };
@@ -24,11 +31,9 @@ describe('validatePlanSpec', () => {
 		expect(validatePlanSpec(plan())).toEqual([]);
 	});
 
-	it('accepts a run with every optional target set', () => {
+	it('accepts a run with every supported target set', () => {
 		const spec = plan({
-			runs: [
-				{ theme: 'a fox', target_distance_km: 8, target_pace_min_per_km: 5.5, target_elevation_gain_m: 120 }
-			]
+			runs: [{ theme: 'a fox', target_distance_km: 8, target_pace_min_per_km: 5.5 }]
 		});
 		expect(validatePlanSpec(spec)).toEqual([]);
 	});
@@ -113,14 +118,54 @@ describe('validatePlanSpec', () => {
 			expect(paths(spec)).toEqual(['runs[0].target_pace_min_per_km']);
 		});
 
-		it('accepts a flat run: zero elevation gain is a target, not an absence', () => {
-			const spec = plan({ runs: [{ theme: 'a fox', target_elevation_gain_m: 0 }] });
-			expect(validatePlanSpec(spec)).toEqual([]);
+		// A perfectly reasonable 120 m climb. Any band check accepts it, so only a
+		// rule that refuses elevation outright fails this — which is the point: the
+		// two implementations are indistinguishable on a negative or absurd value.
+		it('rejects a valid-looking elevation target, because none can be measured', () => {
+			const spec = plan({ runs: [{ theme: 'a fox', target_elevation_gain_m: 120 }] });
+			expect(paths(spec)).toEqual(['runs[0].target_elevation_gain_m']);
 		});
 
-		it('rejects negative elevation gain', () => {
-			const spec = plan({ runs: [{ theme: 'a fox', target_elevation_gain_m: -10 }] });
+		it('rejects a zero elevation target: flat is a claim about hills too', () => {
+			const spec = plan({ runs: [{ theme: 'a fox', target_elevation_gain_m: 0 }] });
 			expect(paths(spec)).toEqual(['runs[0].target_elevation_gain_m']);
+		});
+
+		// The one place this suite asserts wording. Everywhere else the message is
+		// the easy half to test by accident; here it *is* the rule — "unsupported"
+		// and "out of range" differ only in what they tell the user.
+		it('says elevation is unsupported rather than out of range', () => {
+			const spec = plan({ runs: [{ theme: 'a fox', target_elevation_gain_m: 120 }] });
+			expect(validatePlanSpec(spec)[0].message).toBe(ELEVATION_UNSUPPORTED);
+		});
+	});
+
+	describe('runDuration', () => {
+		// 7 × 5.5 = 38.5, deliberately not a whole number: with round figures this
+		// case cannot tell rounding from truncation, or catch a slipped factor.
+		it('uses the requested pace when one is given', () => {
+			expect(runDuration(7, 5.5, 120)).toEqual({
+				duration_minutes: 39,
+				duration_source: 'pace_target'
+			});
+		});
+
+		// The fallback must be passed through untouched, not recomputed: it is the
+		// backend's number, and a second estimate here could disagree with it.
+		it('falls back to the backend estimate, and says so', () => {
+			expect(runDuration(10, undefined, 120)).toEqual({
+				duration_minutes: 120,
+				duration_source: 'default_estimate'
+			});
+		});
+
+		// Distinguishes pace-derived from fallback even when they coincide. Without
+		// this, returning the fallback always would still pass the case above.
+		it('marks the source by origin, not by value', () => {
+			expect(runDuration(10, 12, 120)).toEqual({
+				duration_minutes: 120,
+				duration_source: 'pace_target'
+			});
 		});
 	});
 

@@ -10,7 +10,7 @@
  * Shape-per-run means there is no cross-run geometric invariant to check. Every
  * rule below is either structural (order, anchor, size) or per-run.
  */
-import type { PlanIssue, PlanRunSpec, PlanSpec } from '$types';
+import type { DurationSource, PlanIssue, PlanRunSpec, PlanSpec } from '$types';
 
 /** A week view (5.3) has seven days, so a plan has at most seven runs. */
 export const MAX_RUNS = 7;
@@ -23,8 +23,20 @@ export const MAX_DISTANCE_KM = 30;
 const MIN_PACE = 2;
 const MAX_PACE = 20;
 
-/** Beyond this, the climb is not a target, it is a typo. */
-const MAX_ELEVATION_GAIN_M = 5000;
+/**
+ * Elevation targets are refused, and this is the reason shown.
+ *
+ * Not a band check: there is no elevation data to check a band against. The OSM
+ * walk extracts carry no vertical attribute on nodes or edges, so a run's actual
+ * climb is unknown and a target for it can never be met or missed — only stored.
+ * Silently ignoring the field is the failure mode this avoids: it would leave a
+ * user believing they had asked for hills. Refusing says what is true.
+ *
+ * Deleting this rule is the correct move the day a graph carries elevation, and
+ * the test on it is what will make that deletion deliberate rather than casual.
+ */
+export const ELEVATION_UNSUPPORTED =
+	'Elevation targets are not supported yet — the road graph carries no elevation data, so this could not be measured. Leave it off.';
 
 function validateRun(run: PlanRunSpec, at: string): PlanIssue[] {
 	const issues: PlanIssue[] = [];
@@ -52,11 +64,8 @@ function validateRun(run: PlanRunSpec, at: string): PlanIssue[] {
 		});
 	}
 
-	if (gain !== undefined && !(Number.isFinite(gain) && gain >= 0 && gain <= MAX_ELEVATION_GAIN_M)) {
-		issues.push({
-			path: `${at}.target_elevation_gain_m`,
-			message: `Elevation gain must be between 0 and ${MAX_ELEVATION_GAIN_M} m.`
-		});
+	if (gain !== undefined) {
+		issues.push({ path: `${at}.target_elevation_gain_m`, message: ELEVATION_UNSUPPORTED });
 	}
 
 	return issues;
@@ -91,4 +100,26 @@ export function validatePlanSpec(spec: PlanSpec): PlanIssue[] {
 	runs.forEach((run, i) => issues.push(...validateRun(run, `runs[${i}]`)));
 
 	return issues;
+}
+
+/**
+ * How long a run takes, and on whose authority.
+ *
+ * With a pace target this is arithmetic on the user's own number. Without one it
+ * is `fallbackMinutes` — the backend's `WALKING_KMH = 5.0`, i.e. a 12:00/km walk
+ * reported to someone planning a run. That default is wrong for this app, but
+ * it is wrong for every route rather than only planned ones, and replacing it
+ * means choosing a default running pace, which is a product decision and not
+ * this task's. Naming the source is what keeps the wrong number from passing
+ * itself off as a real prediction in the meantime.
+ */
+export function runDuration(
+	distanceKm: number,
+	pace: number | undefined,
+	fallbackMinutes: number
+): { duration_minutes: number; duration_source: DurationSource } {
+	if (pace === undefined) {
+		return { duration_minutes: fallbackMinutes, duration_source: 'default_estimate' };
+	}
+	return { duration_minutes: Math.round(distanceKm * pace), duration_source: 'pace_target' };
 }
