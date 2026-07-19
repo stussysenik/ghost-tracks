@@ -6,7 +6,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (lint + typecheck)
+    name: Frontend (lint + typecheck + unit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,8 @@ jobs:
         run: npm run lint
       - name: svelte-check (tsc)
         run: npm run check
+      - name: vitest (unit)
+        run: npm run test:unit
 
   backend:
     name: Backend (pytest)

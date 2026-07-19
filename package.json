@@ -12,7 +12,8 @@
 		"doctor": "ruby scripts/doctor.rb",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"test": "playwright test",
+		"test": "vitest run && playwright test",
+		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
 		"test:ui": "playwright test --ui"
 	},
@@ -32,7 +33,8 @@
 		"svelte-check": "^4.3.6",
 		"tailwindcss": "^4.1.18",
 		"typescript": "^5.9.3",
-		"vite": "^7.3.1"
+		"vite": "^7.3.1",
+		"vitest": "^3.2.7"
 	},
 	"dependencies": {
 		"@xstate/svelte": "^5.0.0",
