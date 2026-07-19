@@ -27,6 +27,7 @@ from services.llm import (
     parse_shape_json,
 )
 from services.neighborhood import NeighborhoodService
+from services.distance_target import route_to_distance
 from services.road_graph import DEFAULT_CACHE_DIR, RoadGraph
 from services.shape_router import ShapeRouter
 from services.shape_templates import get_parametric_shape
@@ -94,11 +95,13 @@ class ShapeGenerator:
         max_distance_km: float = 10.0,
         neighborhood: str | None = None,
         area=None,
+        target_distance_km: float | None = None,
     ) -> DescribeResponse:
         """Mode B: Generate a route from a text description.
 
         `area` (a dropped pin) takes precedence; otherwise a curated
-        neighborhood is used or auto-selected."""
+        neighborhood is used or auto-selected. `target_distance_km`, when given,
+        scales the shape's footprint until the measured route hits it."""
         # Step 1: Resolve the target area
         if area is not None:
             hood = area
@@ -125,18 +128,19 @@ class ShapeGenerator:
         # Step 3: Map to streets
         mapped = self.street_mapper.map_to_streets(control_points, hood.bbox)
 
-        # Step 4: Route on the owned OSM walk graph
-        routed = await self._route_waypoints(mapped, hood.bbox)
+        # Step 4: Route on the owned OSM walk graph, scaled to the distance target
+        routed = await self._route_waypoints(mapped, hood.bbox, target_distance_km)
 
         # Step 5: Extract waypoints with turn instructions
         waypoints = self._extract_waypoints(routed["coordinates"])
 
-        # Step 6: Validate shape (compare mapped waypoints vs routed result,
-        # since both are in the same geographic space after scale_to_bbox)
+        # Step 6: Validate shape against the outline that was actually routed.
+        # Distance targeting rescales it, and judging a shrunk route against the
+        # full-size shape would read as a snapping failure the router did not make.
         routed_coords = [Coordinate(lng=c[0], lat=c[1]) for c in routed["coordinates"]]
         validation = await self.validator.validate(
             target_description=description,
-            target_points=mapped,
+            target_points=routed["outline"],
             actual_points=routed_coords,
         )
 
@@ -148,11 +152,11 @@ class ShapeGenerator:
                 control_points, routed_coords
             )
             mapped = self.street_mapper.map_to_streets(control_points, hood.bbox)
-            routed = await self._route_waypoints(mapped, hood.bbox)
+            routed = await self._route_waypoints(mapped, hood.bbox, target_distance_km)
             routed_coords = [Coordinate(lng=c[0], lat=c[1]) for c in routed["coordinates"]]
             validation = await self.validator.validate(
                 target_description=description,
-                target_points=mapped,
+                target_points=routed["outline"],
                 actual_points=routed_coords,
             )
             waypoints = self._extract_waypoints(routed["coordinates"])
@@ -177,6 +181,8 @@ class ShapeGenerator:
             duration_minutes=routed["duration_minutes"],
             waypoints=waypoints,
             alternative_neighborhoods=alternative_neighborhoods,
+            target_distance_km=target_distance_km,
+            best_effort=routed["best_effort"],
         )
 
     # --- Private helpers ---
@@ -276,22 +282,39 @@ class ShapeGenerator:
         scale = min(bbox.width_deg(), bbox.height_deg()) * 0.7
         return get_parametric_shape(description, center, scale)
 
-    def _route_on_graph(self, waypoints: list[Coordinate], bbox: BoundingBox) -> dict:
-        """Route an outline on the owned OSM walk graph. Blocking — see caller."""
+    def _route_on_graph(
+        self,
+        waypoints: list[Coordinate],
+        bbox: BoundingBox,
+        target_km: float | None = None,
+    ) -> dict:
+        """Route an outline on the owned OSM walk graph. Blocking — see caller.
+
+        With a target distance, the shape's footprint is scaled until the measured
+        route hits it. The scaled outline comes back with the route because it, not
+        the outline as drawn, is what the result should be judged against.
+        """
         graph = RoadGraph.for_bbox(
             bbox,
             cache_dir=self.graph_cache_dir,
             allow_download=self.allow_graph_download,
         )
-        routed = ShapeRouter(graph).route(waypoints)
+        router = ShapeRouter(graph)
+        if target_km is None:
+            routed, outline, best_effort = router.route(waypoints), waypoints, False
+        else:
+            result = route_to_distance(router, waypoints, target_km, bounds=bbox)
+            routed, outline, best_effort = result.route, result.outline, result.best_effort
         return {
             "coordinates": [[c.lng, c.lat] for c in routed.coordinates],
             "distance_km": round(routed.distance_km, 1),
             "duration_minutes": routed.duration_minutes,
+            "outline": outline,
+            "best_effort": best_effort,
         }
 
     async def _route_waypoints(
-        self, waypoints: list[Coordinate], bbox: BoundingBox
+        self, waypoints: list[Coordinate], bbox: BoundingBox, target_km: float | None = None
     ) -> dict:
         """Route waypoints on the owned road graph.
 
@@ -301,7 +324,7 @@ class ShapeGenerator:
         actionable by the user and must not be silently degraded into a route
         that does not look like what they asked for.
         """
-        return await asyncio.to_thread(self._route_on_graph, waypoints, bbox)
+        return await asyncio.to_thread(self._route_on_graph, waypoints, bbox, target_km)
 
     def _extract_waypoints(self, coordinates: list[list[float]]) -> list[WaypointMarker]:
         """Extract turn points from routed coordinates."""

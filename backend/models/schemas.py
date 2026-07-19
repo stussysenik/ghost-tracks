@@ -102,6 +102,9 @@ class GenerateResponse(BaseModel):
 class DescribeRequest(BaseModel):
     description: str
     max_distance_km: float = Field(default=10.0, ge=1.0, le=30.0)
+    # Opt-in distance targeting. Absent means "size the shape to the area", the
+    # behaviour before the runnable-route contract; the UI control lands in 4.4.
+    target_distance_km: float | None = Field(default=None, ge=1.0, le=30.0)
     neighborhood: str | None = Field(default=None)
     # Optional dropped pin; when absent the backend auto-selects an area.
     center: Coordinate | None = None
@@ -130,6 +133,11 @@ class DescribeResponse(BaseModel):
     duration_minutes: int
     waypoints: list[WaypointMarker]
     alternative_neighborhoods: list[str] = Field(default_factory=list)
+    # The requested distance, and whether the route actually reached it. When
+    # `best_effort` is true, `distance_km` is the closest achievable length — the
+    # measured truth, never the target rounded into place.
+    target_distance_km: float | None = None
+    best_effort: bool = False
 
 
 class HealthResponse(BaseModel):

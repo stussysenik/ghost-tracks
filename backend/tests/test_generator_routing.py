@@ -77,3 +77,40 @@ def test_unroutable_shape_is_not_silently_degraded():
 
     # Before the anchoring check this returned a single node and 0.0 km as success.
     assert "unanchored" in str(exc.value)
+
+
+def test_target_distance_scales_the_production_route():
+    """The generation flow honours a distance target, not just the eval harness."""
+    gen = _offline_generator()
+    outline = _outline("circle")
+
+    untargeted = gen._route_on_graph(outline, EIXAMPLE.bbox)
+    targeted = gen._route_on_graph(outline, EIXAMPLE.bbox, target_km=3.0)
+
+    assert untargeted["distance_km"] > 4.0  # sized to the area, not to a target
+    assert abs(targeted["distance_km"] - 3.0) / 3.0 <= 0.10
+    assert not targeted["best_effort"]
+
+
+def test_targeted_route_reports_the_outline_it_drew():
+    """Validation must judge the route against the scaled shape, not the drawn one.
+
+    Otherwise a correctly shrunk route scores as a snapping failure and the
+    generator retries against a target it already hit.
+    """
+    gen = _offline_generator()
+    outline = _outline("circle")
+    targeted = gen._route_on_graph(outline, EIXAMPLE.bbox, target_km=3.0)
+
+    assert targeted["outline"] != outline
+    assert len(targeted["outline"]) == len(outline)
+
+
+def test_untargeted_route_is_unchanged():
+    """No target means the previous behaviour, byte for byte."""
+    gen = _offline_generator()
+    outline = _outline("circle")
+    routed = gen._route_on_graph(outline, EIXAMPLE.bbox)
+
+    assert routed["outline"] == outline
+    assert routed["best_effort"] is False

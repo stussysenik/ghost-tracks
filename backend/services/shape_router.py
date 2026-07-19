@@ -145,11 +145,14 @@ class UnroutableShapeError(RuntimeError):
     def __init__(self, diagnostics: list[HopDiagnostic], hops: int) -> None:
         self.diagnostics = diagnostics
         self.hops = hops
-        worst = max(diagnostics, key=lambda d: d.detour_ratio)
+        detail = (
+            f" (worst — {max(diagnostics, key=lambda d: d.detour_ratio).describe()})"
+            if diagnostics
+            else ""
+        )
         super().__init__(
             f"{len(diagnostics)} of {hops} hops cannot be drawn on this street "
-            f"network (worst — {worst.describe()}). Try a larger area or a "
-            f"simpler shape."
+            f"network{detail}. Try a larger area or a simpler shape."
         )
 
 

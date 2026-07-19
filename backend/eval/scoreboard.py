@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from eval.fixtures import Fixture, get_fixtures
@@ -48,14 +49,33 @@ def score_one(fixture: Fixture, cassette: dict) -> StageScores:
     return score_fixture(target, routed, fixture.target_distance_km)
 
 
-# A router under test: fixture -> routed polyline, or None when it has no route.
-RouteProvider = Callable[[Fixture], list[Coordinate] | None]
+@dataclass(frozen=True)
+class RouteAttempt:
+    """What a router produced *and* the outline it was aiming at.
+
+    Both, because distance targeting rescales the outline: scoring a shrunk route
+    against the full-size shape would read as a snapping collapse when the router
+    tracked its target perfectly. The provider is the only thing that knows which
+    geometry it drew, so it reports it.
+    """
+
+    outline: list[Coordinate]
+    routed: list[Coordinate]
+    scale: float = 1.0
+    best_effort: bool = False
 
 
-def cassette_provider(fixture: Fixture) -> list[Coordinate] | None:
+# A router under test: fixture -> attempt, or None when it has no route.
+RouteProvider = Callable[[Fixture], "RouteAttempt | None"]
+
+
+def cassette_provider(fixture: Fixture) -> RouteAttempt | None:
     """The recorded Mapbox baseline — replayed, never called live."""
     cassette = load_recorded(fixture.id)
-    return None if cassette is None else _routed_coords(cassette)
+    if cassette is None:
+        return None
+    # The baseline never scaled to target; its outline is the fixture's as drawn.
+    return RouteAttempt(fixture.target_polyline(), _routed_coords(cassette))
 
 
 def _mean(xs: list[float]) -> float:
@@ -82,6 +102,7 @@ def _aggregate(rows: list[dict]) -> dict:
         "closed_outline_count": len(closed),
         "loop_closure_rate": round(loop_rate, 3),
         "within_distance_rate": round(within_dist, 3),
+        "best_effort_count": sum(1 for r in rows if r.get("best_effort")),
         "mean_distance_error": _mean([s["distance_error"] for s in scores]),
         "mean_repeat_ratio": _mean([s["repeat_ratio"] for s in scores]),
     }
@@ -114,12 +135,11 @@ def build_scoreboard(
     rows: list[dict] = []
     missing: list[str] = []
     for fx in get_fixtures():
-        routed = provider(fx)
-        if routed is None:
+        attempt = provider(fx)
+        if attempt is None:
             missing.append(fx.id)
             continue
-        outline = fx.target_polyline()
-        scores = score_fixture(outline, routed, fx.target_distance_km)
+        scores = score_fixture(attempt.outline, attempt.routed, fx.target_distance_km)
         rows.append(
             {
                 "id": fx.id,
@@ -127,7 +147,9 @@ def build_scoreboard(
                 "area": fx.area_key,
                 "network_tier": fx.area.tier,
                 "difficulty": fx.difficulty,
-                "shape_is_closed": outline_is_closed(outline),
+                "shape_is_closed": outline_is_closed(attempt.outline),
+                "scale": round(attempt.scale, 3),
+                "best_effort": attempt.best_effort,
                 "scores": scores.to_dict(),
             }
         )
@@ -162,17 +184,22 @@ def render_table(scoreboard: dict) -> str:
     lines.append(f"BASELINE: {scoreboard['baseline']}   "
                  f"scored={scoreboard['fixtures_scored']}  missing={len(scoreboard['fixtures_missing'])}")
     lines.append("")
-    header = f"{'fixture':<22}{'tier':<12}{'snap':>6}{'loop':>6}{'dist_err':>10}{'repeat':>8}"
+    header = (
+        f"{'fixture':<22}{'tier':<12}{'snap':>6}{'loop':>6}"
+        f"{'scale':>7}{'dist_err':>10}{'repeat':>8}"
+    )
     lines.append(header)
     lines.append("-" * len(header))
     for r in scoreboard["rows"]:
         s = r["scores"]
         # "-" = open shape, closure not graded (not a silent pass).
         loop = ("Y" if s["is_loop"] else "n") if r["shape_is_closed"] else "-"
+        # "!" marks a best-effort route: target missed, closest try returned.
+        err = f"{s['distance_error']:.2f}{'!' if r.get('best_effort') else ' '}"
         lines.append(
             f"{r['id']:<22}{r['difficulty']:<12}"
             f"{s['snap_score']:>6.1f}{loop:>6}"
-            f"{s['distance_error']:>10.2f}{s['repeat_ratio']:>8.2f}"
+            f"{r.get('scale', 1.0):>7.2f}{err:>10}{s['repeat_ratio']:>8.2f}"
         )
     lines.append("")
     o = scoreboard.get("overall", {})

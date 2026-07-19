@@ -9,7 +9,8 @@ since loading dominates routing cost.
 from __future__ import annotations
 
 from eval.fixtures import GRAPHS_DIR, Fixture
-from models.schemas import Coordinate
+from eval.scoreboard import RouteAttempt
+from services.distance_target import route_to_distance
 from services.road_graph import RoadGraph
 from services.shape_router import ShapeRouter, UnroutableShapeError
 
@@ -24,10 +25,26 @@ def _graph_for(fixture: Fixture) -> RoadGraph:
     return _GRAPHS[fixture.area_key]
 
 
-def graph_provider(fixture: Fixture) -> list[Coordinate] | None:
-    """Route a fixture on the owned graph. None when the area can't express it."""
+def graph_provider(fixture: Fixture) -> RouteAttempt | None:
+    """Route a fixture on the owned graph, scaled to its distance target.
+
+    The fixture's `target_distance_km` was declared from the start but never acted
+    on — the outline was always sized to the area. Routing to it here is what makes
+    `within_distance_rate` measure the router instead of the fixture manifest.
+    """
     router = ShapeRouter(_graph_for(fixture))
     try:
-        return router.route(fixture.target_polyline()).coordinates
+        result = route_to_distance(
+            router,
+            fixture.target_polyline(),
+            fixture.target_distance_km,
+            bounds=fixture.area.bbox,
+        )
     except UnroutableShapeError:
         return None
+    return RouteAttempt(
+        outline=result.outline,
+        routed=result.route.coordinates,
+        scale=result.scale,
+        best_effort=result.best_effort,
+    )

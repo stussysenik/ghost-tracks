@@ -24,6 +24,7 @@ async def describe_shape(req: DescribeRequest) -> DescribeResponse:
             max_distance_km=req.max_distance_km,
             neighborhood=req.neighborhood,
             area=area,
+            target_distance_km=req.target_distance_km,
         )
     except (ValueError, UnroutableShapeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))

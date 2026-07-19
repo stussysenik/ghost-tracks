@@ -9,6 +9,7 @@
     "closed_outline_count": 7,
     "loop_closure_rate": 1.0,
     "within_distance_rate": 0.083,
+    "best_effort_count": 0,
     "mean_distance_error": 1.581,
     "mean_repeat_ratio": 0.335
   },
@@ -20,6 +21,7 @@
       "closed_outline_count": 3,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.0,
+      "best_effort_count": 0,
       "mean_distance_error": 2.67,
       "mean_repeat_ratio": 0.309
     },
@@ -30,6 +32,7 @@
       "closed_outline_count": 4,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.25,
+      "best_effort_count": 0,
       "mean_distance_error": 1.3,
       "mean_repeat_ratio": 0.323
     },
@@ -40,6 +43,7 @@
       "closed_outline_count": 0,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.0,
+      "best_effort_count": 0,
       "mean_distance_error": 1.151,
       "mean_repeat_ratio": 0.36
     }
@@ -52,6 +56,7 @@
       "closed_outline_count": 3,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.25,
+      "best_effort_count": 0,
       "mean_distance_error": 0.517,
       "mean_repeat_ratio": 0.252
     },
@@ -62,6 +67,7 @@
       "closed_outline_count": 2,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.0,
+      "best_effort_count": 0,
       "mean_distance_error": 1.021,
       "mean_repeat_ratio": 0.269
     },
@@ -72,6 +78,7 @@
       "closed_outline_count": 2,
       "loop_closure_rate": 1.0,
       "within_distance_rate": 0.0,
+      "best_effort_count": 0,
       "mean_distance_error": 3.204,
       "mean_repeat_ratio": 0.484
     }
@@ -85,6 +92,8 @@
       "network_tier": "dense_grid",
       "difficulty": "easy",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 92.8,
@@ -108,6 +117,8 @@
       "network_tier": "irregular",
       "difficulty": "easy",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 144.9,
@@ -131,6 +142,8 @@
       "network_tier": "sparse",
       "difficulty": "easy",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 250.2,
@@ -154,6 +167,8 @@
       "network_tier": "irregular",
       "difficulty": "moderate",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 94.0,
@@ -177,6 +192,8 @@
       "network_tier": "dense_grid",
       "difficulty": "moderate",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 78.4,
@@ -200,6 +217,8 @@
       "network_tier": "sparse",
       "difficulty": "moderate",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 786.4,
@@ -223,6 +242,8 @@
       "network_tier": "dense_grid",
       "difficulty": "moderate",
       "shape_is_closed": true,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 95.9,
@@ -246,6 +267,8 @@
       "network_tier": "irregular",
       "difficulty": "hard",
       "shape_is_closed": false,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 129.9,
@@ -269,6 +292,8 @@
       "network_tier": "sparse",
       "difficulty": "hard",
       "shape_is_closed": false,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 394.0,
@@ -292,6 +317,8 @@
       "network_tier": "dense_grid",
       "difficulty": "hard",
       "shape_is_closed": false,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 123.6,
@@ -315,6 +342,8 @@
       "network_tier": "irregular",
       "difficulty": "hard",
       "shape_is_closed": false,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 151.5,
@@ -338,6 +367,8 @@
       "network_tier": "sparse",
       "difficulty": "hard",
       "shape_is_closed": false,
+      "scale": 1.0,
+      "best_effort": false,
       "scores": {
         "extraction_iou": 100.0,
         "hausdorff_m": 445.2,
