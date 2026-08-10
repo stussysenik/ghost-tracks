@@ -153,3 +153,38 @@ class DescribeResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
+
+
+# --- Billing ---
+
+
+class CheckoutRequest(BaseModel):
+    # Opaque, user-facing license identifier generated client-side. The app
+    # never knows the Stripe secret; this is the only client-held billing token.
+    license_key: str
+    # How many export credits to buy. One credit == one GPX export.
+    credits: int = Field(default=5, ge=1, le=100)
+
+
+class CheckoutResponse(BaseModel):
+    # Stripe Checkout URL the client opens in a browser to pay.
+    session_url: str
+    session_id: str
+
+
+class ClaimRequest(BaseModel):
+    license_key: str
+
+
+class ConsumeRequest(BaseModel):
+    license_key: str
+
+
+class ConsumeResponse(BaseModel):
+    ok: bool
+    remaining: int
+
+
+class BillingStatusResponse(BaseModel):
+    licensed: bool
+    remaining: int
