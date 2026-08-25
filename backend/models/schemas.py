@@ -188,3 +188,44 @@ class ConsumeResponse(BaseModel):
 class BillingStatusResponse(BaseModel):
     licensed: bool
     remaining: int
+
+
+# --- Feasibility ---
+
+
+class FeasibilityRequest(BaseModel):
+    description: str
+    center: Coordinate
+    radius_km: float = Field(default=1.0, ge=0.1, le=20.0)
+
+
+class ScoreBreakdown(BaseModel):
+    hausdorff: float
+    ordered_sampling: float
+    raster_iou: float
+
+
+class AlternativeLocation(BaseModel):
+    name: str
+    score: float
+    distance_km: float
+    center: Coordinate
+    feasible: bool
+
+
+class CityResult(BaseModel):
+    city: str
+    neighborhood: str
+    score: float
+    feasible: bool
+    center: Coordinate
+
+
+class FeasibilityResponse(BaseModel):
+    feasible: bool
+    score: float
+    breakdown: ScoreBreakdown
+    bbox_used: BoundingBox
+    route: DescribeResponse | None = None  # full route if feasible
+    nearest_alternatives: list[AlternativeLocation] = []
+    other_cities: list[CityResult] = []

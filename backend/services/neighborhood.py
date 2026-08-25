@@ -167,9 +167,116 @@ class NeighborhoodService:
             )
         return "\n".join(lines)
 
+    def get_sorted_by_distance(self, center: Coordinate) -> list[Neighborhood]:
+        """Return all neighborhoods sorted by haversine distance from the given center."""
+        from services.street_mapper import haversine_distance_m
+
+        scored = [(haversine_distance_m(center, n.center), n) for n in self._neighborhoods]
+        scored.sort(key=lambda x: x[0])
+        return [n for _, n in scored]
+
     @staticmethod
     def _strip_diacritics(text: str) -> str:
         import unicodedata
 
         nfkd = unicodedata.normalize("NFKD", text)
         return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+# World cities with seed neighborhoods for cross-city feasibility checks
+WORLD_CITIES: dict[str, list[Neighborhood]] = {
+    "Berlin": [
+        Neighborhood(
+            name="Kreuzberg", name_cs="Kreuzberg",
+            center=Coordinate(lng=13.4050, lat=52.4990),
+            bbox=BoundingBox(min_lng=13.385, min_lat=52.489, max_lng=13.425, max_lat=52.509),
+            street_layout="grid", character="Dense urban grid with wide avenues",
+            good_for=["geometric", "letters", "hearts"],
+        ),
+        Neighborhood(
+            name="Tiergarten", name_cs="Tiergarten",
+            center=Coordinate(lng=13.3500, lat=52.5145),
+            bbox=BoundingBox(min_lng=13.330, min_lat=52.504, max_lng=13.370, max_lat=52.525),
+            street_layout="organic", character="Park paths and tree-lined boulevards",
+            good_for=["circles", "organic", "flowers"],
+        ),
+    ],
+    "NYC": [
+        Neighborhood(
+            name="Midtown Manhattan", name_cs="Midtown Manhattan",
+            center=Coordinate(lng=-73.9845, lat=40.7549),
+            bbox=BoundingBox(min_lng=-74.004, min_lat=40.745, max_lng=-73.965, max_lat=40.765),
+            street_layout="grid", character="Classic numbered grid, long avenues",
+            good_for=["letters", "geometric", "arrows"],
+        ),
+        Neighborhood(
+            name="Central Park", name_cs="Central Park",
+            center=Coordinate(lng=-73.9665, lat=40.7829),
+            bbox=BoundingBox(min_lng=-73.981, min_lat=40.764, max_lng=-73.949, max_lat=40.800),
+            street_layout="organic", character="Winding park loops and meadow paths",
+            good_for=["circles", "hearts", "organic"],
+        ),
+        Neighborhood(
+            name="Brooklyn Heights", name_cs="Brooklyn Heights",
+            center=Coordinate(lng=-73.9936, lat=40.6960),
+            bbox=BoundingBox(min_lng=-74.003, min_lat=40.686, max_lng=-73.984, max_lat=40.706),
+            street_layout="mixed", character="Tree-lined streets with waterfront promenade",
+            good_for=["hearts", "stars", "geometric"],
+        ),
+    ],
+    "London": [
+        Neighborhood(
+            name="Hyde Park", name_cs="Hyde Park",
+            center=Coordinate(lng=-0.1657, lat=51.5073),
+            bbox=BoundingBox(min_lng=-0.185, min_lat=51.497, max_lng=-0.146, max_lat=51.517),
+            street_layout="organic", character="Royal park with serpentine paths",
+            good_for=["circles", "hearts", "organic"],
+        ),
+        Neighborhood(
+            name="Shoreditch", name_cs="Shoreditch",
+            center=Coordinate(lng=-0.0774, lat=51.5265),
+            bbox=BoundingBox(min_lng=-0.092, min_lat=51.517, max_lng=-0.063, max_lat=51.536),
+            street_layout="mixed", character="Dense creative quarter with angled streets",
+            good_for=["stars", "letters", "geometric"],
+        ),
+    ],
+    "Barcelona": [
+        Neighborhood(
+            name="Eixample", name_cs="Eixample",
+            center=Coordinate(lng=2.1634, lat=41.3918),
+            bbox=BoundingBox(min_lng=2.143, min_lat=41.382, max_lng=2.183, max_lat=41.402),
+            street_layout="grid", character="Iconic octagonal grid with chamfered blocks",
+            good_for=["geometric", "letters", "squares"],
+        ),
+        Neighborhood(
+            name="Parc de la Ciutadella", name_cs="Parc de la Ciutadella",
+            center=Coordinate(lng=2.1870, lat=41.3879),
+            bbox=BoundingBox(min_lng=2.177, min_lat=51.378, max_lng=2.197, max_lat=41.398),
+            street_layout="organic", character="Large park with lake and winding paths",
+            good_for=["circles", "hearts", "organic"],
+        ),
+    ],
+    "Tokyo": [
+        Neighborhood(
+            name="Shibuya", name_cs="Shibuya",
+            center=Coordinate(lng=139.7016, lat=35.6580),
+            bbox=BoundingBox(min_lng=139.690, min_lat=35.648, max_lng=139.713, max_lat=35.668),
+            street_layout="organic", character="Dense scramble area with narrow winding streets",
+            good_for=["organic", "circles", "hearts"],
+        ),
+        Neighborhood(
+            name="Chiyoda", name_cs="Chiyoda",
+            center=Coordinate(lng=139.7530, lat=35.6938),
+            bbox=BoundingBox(min_lng=139.740, min_lat=35.684, max_lng=139.766, max_lat=35.704),
+            street_layout="mixed", character="Imperial palace moats and wide boulevards",
+            good_for=["geometric", "squares", "circles"],
+        ),
+        Neighborhood(
+            name="Shinjuku Gyoen", name_cs="Shinjuku Gyoen",
+            center=Coordinate(lng=139.7100, lat=35.6852),
+            bbox=BoundingBox(min_lng=139.700, min_lat=35.675, max_lng=139.720, max_lat=35.695),
+            street_layout="organic", character="Garden park with formal and landscape paths",
+            good_for=["hearts", "flowers", "organic"],
+        ),
+    ],
+}

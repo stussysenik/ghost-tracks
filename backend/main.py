@@ -19,7 +19,7 @@ logfire.configure(send_to_logfire=False)
 # Allow imports from backend root when running as `uvicorn main:app`
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from routers import area, billing, generate, describe, health  # noqa: E402
+from routers import area, billing, generate, describe, feasibility, health  # noqa: E402
 
 app = FastAPI(
     title="Ghost Tracks Backend",
@@ -36,6 +36,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
+        "http://localhost:8910",
+        "http://127.0.0.1:8910",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,3 +48,4 @@ app.include_router(generate.router, prefix="/generate", tags=["generate"])
 app.include_router(describe.router, prefix="/describe", tags=["describe"])
 app.include_router(area.router, prefix="/area", tags=["area"])
 app.include_router(billing.router, tags=["billing"])
+app.include_router(feasibility.router, prefix="/feasibility", tags=["feasibility"])

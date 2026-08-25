@@ -138,20 +138,79 @@ class StreetMapper:
             result.append(points[-1])
         return result
 
+    def split_into_segments(
+        self,
+        points: list[Coordinate],
+        n_segments: int = 6,
+    ) -> list[list[Coordinate]]:
+        """Split a shape into n roughly equal arc-length segments.
+
+        Each segment overlaps by 1 point with the next for stitching.
+        Based on Variant E (Segment-Wise) from the shape-routing-algorithms
+        experiment which showed +0.2% avg improvement and best scores on
+        complex shapes (triangle, letterA).
+        """
+        if len(points) < 2 or n_segments < 2:
+            return [list(points)]
+
+        # Compute cumulative arc lengths
+        arc_lengths = [0.0]
+        for i in range(1, len(points)):
+            arc_lengths.append(
+                arc_lengths[-1] + haversine_distance_m(points[i - 1], points[i])
+            )
+        total_length = arc_lengths[-1]
+        if total_length < 1.0:
+            return [list(points)]
+
+        segment_length = total_length / n_segments
+        segments: list[list[Coordinate]] = []
+        current_segment: list[Coordinate] = [points[0]]
+        current_target = segment_length
+        seg_idx = 1
+
+        for i in range(1, len(points)):
+            current_segment.append(points[i])
+            if arc_lengths[i] >= current_target and seg_idx < n_segments:
+                segments.append(current_segment)
+                # Start new segment with overlap (last point of previous)
+                current_segment = [points[i]]
+                seg_idx += 1
+                current_target = segment_length * seg_idx
+
+        # Add remaining points to last segment
+        if current_segment:
+            if segments and current_segment[0] == segments[-1][-1] and len(current_segment) == 1:
+                pass  # empty segment, skip
+            else:
+                segments.append(current_segment)
+
+        return segments if segments else [list(points)]
+
     def map_to_streets(
         self,
         control_points: list[Coordinate],
         target_bbox: BoundingBox,
     ) -> list[Coordinate]:
-        """Full pipeline: scale → densify → deduplicate.
+        """Segment-wise pipeline: scale → split → per-segment densify+dedup → stitch.
 
-        The resulting waypoints are close enough to real streets that the
-        Mapbox Directions API will snap them when routing.
+        Uses the Variant E (Segment-Wise) approach from the shape-routing-algorithms
+        experiment. Splits the shape into 6 arc-length segments and processes each
+        independently with tighter parameters (50m densify, 10m dedup) for better
+        fidelity on complex shapes.
         """
         scaled = self.scale_to_bbox(control_points, target_bbox)
-        dense = self.densify(scaled, max_segment_m=80.0)
-        clean = self.deduplicate(dense, min_distance_m=12.0)
-        return clean
+        segments = self.split_into_segments(scaled, n_segments=6)
+
+        result: list[Coordinate] = []
+        for seg in segments:
+            dense = self.densify(seg, max_segment_m=50.0)
+            clean = self.deduplicate(dense, min_distance_m=10.0)
+            if result and clean and result[-1] == clean[0]:
+                clean = clean[1:]  # remove overlap point
+            result.extend(clean)
+
+        return result
 
     def estimate_distance_km(self, points: list[Coordinate]) -> float:
         """Estimate total route distance from waypoints."""

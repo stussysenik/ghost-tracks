@@ -14,9 +14,13 @@ ShapeTemplateFunc = Callable[[float, float, float], list[Coordinate]]
 
 
 def _heart(cx: float, cy: float, scale: float) -> list[Coordinate]:
-    """Parametric heart curve with high density for street-routing fidelity."""
+    """Parametric heart curve with high density for street-routing fidelity.
+
+    Uses 128 control points (up from 64) for better curve fidelity,
+    based on shape-routing-algorithms experiment Variant E findings.
+    """
     points: list[Coordinate] = []
-    n = 64
+    n = 128
     for i in range(n):
         t = 2 * math.pi * i / (n - 1)
         x = 16 * math.sin(t) ** 3
@@ -31,7 +35,11 @@ def _heart(cx: float, cy: float, scale: float) -> list[Coordinate]:
 
 
 def _star(cx: float, cy: float, scale: float) -> list[Coordinate]:
-    """Five-pointed star with midpoints on each edge for better street snapping."""
+    """Five-pointed star with dense interpolation for better street snapping.
+
+    Uses 4 intermediate points per edge (40 total, up from 20) for sharper
+    tip fidelity, based on shape-routing-algorithms experiment findings.
+    """
     outer_r = scale * 0.5
     inner_r = outer_r * 0.38
     # Generate 10 vertices (alternating outer/inner)
@@ -41,13 +49,18 @@ def _star(cx: float, cy: float, scale: float) -> list[Coordinate]:
         r = outer_r if i % 2 == 0 else inner_r
         vertices.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
 
-    # Interpolate: add midpoint between each consecutive pair
+    # Interpolate: add 3 intermediate points between each consecutive pair
     points: list[Coordinate] = []
     for i in range(len(vertices)):
         ax, ay = vertices[i]
         bx, by = vertices[(i + 1) % len(vertices)]
         points.append(Coordinate(lng=ax, lat=ay))
-        points.append(Coordinate(lng=(ax + bx) / 2, lat=(ay + by) / 2))
+        for j in range(1, 4):
+            frac = j / 4
+            points.append(Coordinate(
+                lng=ax + (bx - ax) * frac,
+                lat=ay + (by - ay) * frac,
+            ))
     points.append(points[0])  # close
     return points
 
